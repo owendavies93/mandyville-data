@@ -2,6 +2,9 @@ package Mandyville::API::FootballData;
 
 use Mojo::Base -base, -signatures;
 
+use Mandyville::Config qw(config);
+
+use Carp;
 use Const::Fast;
 use File::Temp;
 use File::Slurp;
@@ -29,8 +32,15 @@ use Mojo::UserAgent;
 const my $BASE_URL    => "http://api.football-data.org/v2/";
 const my $EXPIRY_TIME => 60 / 24 / 60; # 60 minutes in days
 
-has 'cache' => sub { {} };
-has 'ua'    => sub { Mojo::UserAgent->new->connect_timeout(20) };
+has 'conf' => sub {
+    my $config_hash = config();
+    croak "Missing football-data API token"
+        unless defined $config_hash->{football_data}->{api_token};
+    return $config_hash;
+};
+
+has 'cache'  => sub { {} };
+has 'ua'     => sub { Mojo::UserAgent->new->connect_timeout(20) };
 
 sub _get($self, $path) {
     if (defined $self->cache->{$path}) {
@@ -43,7 +53,8 @@ sub _get($self, $path) {
 
     # TODO: Add auth via config module
     my $json = $self->ua->get(
-        $BASE_URL . $path
+        $BASE_URL . $path,
+        { 'X-Auth-Token' => $self->conf->{football_data}->{api_token} }
     );
 
     my $fh = File::Temp->new( UNLINK => 0, SUFFIX => '.json' );

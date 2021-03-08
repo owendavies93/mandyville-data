@@ -4,7 +4,9 @@ use Mojo::Base -strict;
 
 use Mojo::JSON qw(decode_json encode_json);
 use Overload::FileCheck qw(mock_file_check unmock_file_check);
+use Test::Exception;
 use Test::MockObject::Extends;
+use Test::MockModule;
 use Test::More;
 
 ######
@@ -15,6 +17,20 @@ use_ok 'Mandyville::API::FootballData';
 require_ok 'Mandyville::API::FootballData';
 
 use Mandyville::API::FootballData;
+
+######
+# TEST new
+######
+
+{
+    ok( Mandyville::API::FootballData->new, 'new: initialises okay' );
+
+    my $mock = Test::MockModule->new('Mandyville::API::FootballData');
+    $mock->mock(config => { test => 1 });
+
+    dies_ok { Mandyville::API::FootballData->new->conf }
+            'new: dies without correct config';
+}
 
 ######
 # TEST _get

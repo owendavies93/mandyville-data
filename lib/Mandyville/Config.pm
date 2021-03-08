@@ -21,7 +21,7 @@ const my $PATH      => $ENV{MANDYVILLE_CONFIG} || '/etc/mandyville/config.yaml';
 
 =head1 SYNOPSIS
 
-  use Mandville::Config;
+  use Mandville::Config qw(config);
   my $config_hash = config();
 
 =head1 DESCRIPTION
