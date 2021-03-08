@@ -1,0 +1,4 @@
+# External APIs
+
+football_data:
+  api_token: 'changeme'
