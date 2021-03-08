@@ -1,0 +1,53 @@
+# Perl::Critic configuration
+#
+# See https://metacpan.org/pod/Perl::Critic#CONFIGURATION for details of the
+# syntax in use here.
+#
+# See https://metacpan.org/pod/distribution/Perl-Critic/lib/Perl/Critic/PolicySummary.pod
+# for details of the policies available to use.
+#
+# Please add detailed comments when adding to this file.
+
+# Use all 'gentle' and 'stern' severity policies
+severity = 4
+
+####
+# Include some policies from more severe settings that I think are worth
+# following in general
+####
+
+# Use spaces instead of tabs.
+[CodeLayout::ProhibitHardTabs]
+severity = 4
+
+# Don't use whitespace at the end of lines.
+[CodeLayout::ProhibitTrailingWhitespace]
+severity = 4
+
+# The =head1 NAME section should match the package.
+[Documentation::RequirePackageMatchesPodName]
+severity = 4
+
+# Minimize complexity in code that is outside of subroutines.
+[Modules::ProhibitExcessMainComplexity]
+severity = 4
+
+# Too many arguments.
+[Subroutines::ProhibitManyArgs]
+severity = 4
+
+# Prevent access to private subs in other packages.
+[Subroutines::ProtectPrivateSubs]
+severity = 4
+
+# Prevent access to private vars in other packages.
+[Variables::ProtectPrivateVars]
+severity = 4
+
+####
+# Exclude some policies that I think are overly strict or are out of date. Do
+# this by bumping them into the next severity group
+####
+
+[Subroutines::ProhibitSubroutinePrototypes]
+severity = 3
