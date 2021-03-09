@@ -32,10 +32,6 @@ severity = 4
 [Modules::ProhibitExcessMainComplexity]
 severity = 4
 
-# Too many arguments.
-[Subroutines::ProhibitManyArgs]
-severity = 4
-
 # Prevent access to private subs in other packages.
 [Subroutines::ProtectPrivateSubs]
 severity = 4

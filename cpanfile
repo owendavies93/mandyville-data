@@ -2,6 +2,7 @@
 requires 'Mojo::Base';
 
 # libs
+requires 'Dir::Self';
 requires 'Const::Fast';
 requires 'File::Temp';
 requires 'File::Slurp';

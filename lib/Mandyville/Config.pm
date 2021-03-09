@@ -4,8 +4,8 @@ use Mojo::Base -strict, -signatures;
 
 use Const::Fast;
 use Cwd qw(realpath);
+use Dir::Self;
 use Exporter;
-use FindBin;
 use YAML::XS qw(LoadFile);
 
 our (@ISA, @EXPORT_OK);
@@ -57,13 +57,13 @@ sub config($path = $PATH) {
 
 =cut
 
-sub _find_local_config($file, $depth = 0, $dir = $FindBin::Bin) {
+sub _find_local_config($file, $depth = 0, $dir = __DIR__) {
     if (-f "$dir/$file") {
         return "$dir/$file";
     } elsif ($dir ne '/' && $depth < $MAX_DEPTH) {
         return _find_local_config($file, $depth + 1, realpath("$dir/.."));
     } else {
-        die "Could not find '$file' relative to '$FindBin::Bin'."
+        die "Could not find '$file' relative to '__DIR__'."
     }
 }
 
