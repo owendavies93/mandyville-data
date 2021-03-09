@@ -28,5 +28,5 @@ jobs:
             GITHUB_TOKEN: ${{secrets.COVERALLS_TOKEN}}
         run: |
           cpanm --installdeps --notest .
-          cover -test -report Coveralls
+          cover -test -report Coveralls -make 'prove -lr t'
           
