@@ -1,6 +1,7 @@
 ## Data
 
 ![Tests](https://github.com/sirgraystar/mandyville-data/actions/workflows/test.yml/badge.svg)
+[![Coverage Status](https://coveralls.io/repos/github/sirgraystar/mandyville-data/badge.svg)](https://coveralls.io/github/sirgraystar/mandyville-data)
 
 Data fetching, external API interaction and data storage for mandyville.
 
