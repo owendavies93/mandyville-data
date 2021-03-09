@@ -6,6 +6,6 @@ use warnings;
 use Test::More;
 use Test::Pod;
 
-all_pod_files_ok(qw( bin lib ));
+all_pod_files_ok(qw( lib ));
 
 done_testing();
