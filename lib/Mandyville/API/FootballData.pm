@@ -51,7 +51,6 @@ sub _get($self, $path) {
         }
     }
 
-    # TODO: Add auth via config module
     my $json = $self->ua->get(
         $BASE_URL . $path,
         { 'X-Auth-Token' => $self->conf->{football_data}->{api_token} }
