@@ -1,0 +1,26 @@
+name: Mandyville Data Tests
+
+on:
+  push:
+    branches: '*'
+  pull_request:
+    branches: '*'
+
+jobs:
+  perl-job:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        perl-version:
+          - '5.26'
+    container:
+      image: perldocker/perl-tester:${{matrix.perl-version}}
+    name: Perl Tests
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run tests
+        run: |
+          cpanm --installdeps --notest .
+          prove -lr t
+          
