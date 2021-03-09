@@ -8,6 +8,7 @@ requires 'File::Temp';
 requires 'YAML::XS';
 
 # tests
+requires 'Devel::Cover::Report::Coveralls';
 requires 'Overload::FileCheck';
 requires 'Test::Exception';
 requires 'Test::MockModule';
