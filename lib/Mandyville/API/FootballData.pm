@@ -7,7 +7,7 @@ use Mandyville::Config qw(config);
 use Carp;
 use Const::Fast;
 use File::Temp;
-use File::Slurp;
+use Mojo::File;
 use Mojo::JSON qw(decode_json);
 use Mojo::UserAgent;
 
@@ -46,7 +46,7 @@ sub _get($self, $path) {
     if (defined $self->cache->{$path}) {
         my $cache_path = $self->cache->{$path};
         if (-f $cache_path && -M $cache_path <= $EXPIRY_TIME) {
-            my $json = read_file($cache_path);
+            my $json = Mojo::File->new($cache_path)->slurp;
             return decode_json($json);
         }
     }

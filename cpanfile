@@ -5,7 +5,6 @@ requires 'Mojo::Base';
 requires 'Dir::Self';
 requires 'Const::Fast';
 requires 'File::Temp';
-requires 'File::Slurp';
 requires 'YAML::XS';
 
 # tests
