@@ -6,12 +6,12 @@ Data fetching, external API interaction and data storage for mandyville.
 
 #### Running
 * Perl 5.20+
-* `Mojo::Base`
+* Everything in the `cpanfile` in the root of this repo
 
 #### Testing
-* `Test::Perl::Critic`
-* `Test::Pod`
-* `Test::Pod::Coverage`
+* Install `cpanm` with `dnf install cpanminus`
+* Run `cpanm --installdeps --notest .` to fetch the dependancies
+* Run `prove -lr t` to run the tests
 
 ### TODO
 
