@@ -1,5 +1,7 @@
 ## Data
 
+![Tests](https://github.com/sirgraystar/mandyville-data/actions/workflows/test.yml/badge.svg)
+
 Data fetching, external API interaction and data storage for mandyville.
 
 ### Requirements
