@@ -42,6 +42,24 @@ has 'conf' => sub {
 has 'cache'  => sub { {} };
 has 'ua'     => sub { Mojo::UserAgent->new->connect_timeout(20) };
 
+=head1 METHODS
+
+=over
+
+=item competitions
+
+  Fetch the top level competition data for all known competitions
+
+=cut
+
+sub competitions($self) {
+    return $self->_get('competitions');
+}
+
+=back
+
+=cut
+
 sub _get($self, $path) {
     if (defined $self->cache->{$path}) {
         my $cache_path = $self->cache->{$path};

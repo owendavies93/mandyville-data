@@ -72,5 +72,35 @@ use Mandyville::API::FootballData;
     unmock_file_check('-M');
 }
 
+######
+# TEST competitions
+######
+
+{
+    my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
+
+    $mock_ua->mock( 'get', sub {
+        my $data = {
+            count => 1,
+            competitions => [{
+                id   => 1,
+                name => 'Premier League',
+            }]
+        };
+        return encode_json($data);
+    });
+
+    my $api = Mandyville::API::FootballData->new;
+    $api->ua($mock_ua);
+
+    my $response = $api->competitions;
+    
+    cmp_ok( $response->{count}, '==', 1, 'competitions: correct count' );
+
+    my $name = $response->{competitions}->[0]->{name};
+
+    cmp_ok( $name, 'eq', 'Premier League', 'competitions: correct count' );
+}
+
 done_testing;
 
