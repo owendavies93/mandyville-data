@@ -40,6 +40,8 @@ jobs:
           MANDYVILLE_DB_PASS: ${{secrets.MANDYVILLE_DB_PASS}}
         run: |
           apt install -y libdbd-pg-perl
+          curl -s https://packagecloud.io/install/repositories/golang-migrate/migrate/script.deb.sh | bash
+          apt install -y migrate=4.14.1 postgresql-client
           cpanm --installdeps --notest .
           prove -lr t
       - name: Run tests with coverage
@@ -49,6 +51,8 @@ jobs:
           COVERALLS_REPO_TOKEN: ${{secrets.COVERALLS_TOKEN}}
         run: |
           apt install -y libdbd-pg-perl
+          curl -s https://packagecloud.io/install/repositories/golang-migrate/migrate/script.deb.sh | bash
+          apt install -y migrate=4.14.1 postgresql-client
           cpanm --installdeps --notest .
           cover -test -silent -report Coveralls -make 'prove -lr t; exit $?;'
           
