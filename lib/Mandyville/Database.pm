@@ -165,17 +165,19 @@ sub _db_handle($self, $ro = 0) {
         my $meta_directory = $self->_find_meta_directory();
         my $path = $meta_directory . "/migrations";
 
-        my $status = system(
-            'migrate', '-database', $migration_dsn, '-path', $path, 'up'
-        );
+        capture_merged {
+            my $status = system(
+                'migrate', '-database', $migration_dsn, '-path', $path, 'up'
+            );
 
-        if ($status != 0) {
-            die "Populating test schema failed: $status";
-        }
+            if ($status != 0) {
+                die "Populating test schema failed: $status";
+            }
+        };
 
         # Add the base data to the database
         my $base_data_file = $meta_directory . $BASE_DATA;
-        $status = system(
+        my $status = system(
             "psql $migration_dsn < \Q$base_data_file"
         );
 
