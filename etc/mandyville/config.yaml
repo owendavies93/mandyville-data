@@ -1,4 +1,15 @@
+# Database
+
+database:
+  read_user:  'postgres_ro'
+  write_user: 'postgres'
+  db:         'mandyville'
+  host:       'localhost'
+  port:       5432
+  pass:       'password'
+
 # External APIs
 
 football_data:
   api_token: 'changeme'
+

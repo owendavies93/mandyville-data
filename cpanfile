@@ -2,8 +2,11 @@
 requires 'Mojo::Base';
 
 # libs
-requires 'Dir::Self';
+requires 'Capture::Tiny';
 requires 'Const::Fast';
+requires 'Dir::Self';
+requires 'DBD::Pg';
+requires 'DBI';
 requires 'File::Temp';
 requires 'YAML::XS';
 
