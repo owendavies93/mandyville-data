@@ -32,12 +32,14 @@ jobs:
     name: Perl Tests
     steps:
       - uses: actions/checkout@v2
+      - with:
+          submodules: recursive
       - name: Run tests
         env:
           MANDYVILLE_DB_HOST: postgres
           MANDYVILLE_DB_PASS: ${{secrets.MANDYVILLE_DB_PASS}}
         run: |
-          apt install libdbd-pg-perl
+          apt install -y libdbd-pg-perl
           cpanm --installdeps --notest .
           prove -lr t
       - name: Run tests with coverage
@@ -46,7 +48,7 @@ jobs:
           MANDYVILLE_DB_PASS: ${{secrets.MANDYVILLE_DB_PASS}}
           COVERALLS_REPO_TOKEN: ${{secrets.COVERALLS_TOKEN}}
         run: |
-          apt install libdbd-pg-perl
+          apt install -y libdbd-pg-perl
           cpanm --installdeps --notest .
           cover -test -silent -report Coveralls -make 'prove -lr t; exit $?;'
           
