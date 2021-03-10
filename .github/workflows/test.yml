@@ -32,7 +32,7 @@ jobs:
     name: Perl Tests
     steps:
       - uses: actions/checkout@v2
-      - with:
+        with:
           submodules: recursive
       - name: Run tests
         env:
