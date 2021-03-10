@@ -14,7 +14,13 @@ Data fetching, external API interaction and data storage for mandyville.
 #### Testing
 * Install `cpanm` with `dnf install cpanminus`
 * Run `cpanm --installdeps --notest .` to fetch the dependancies
-* Run `prove -lr t` to run the tests
+* Run `prove -lr t` to run the tests. You'll probably need to set the
+  following environment variables:
+  * `MANDYVILLE_DB_HOST` - the hostname of your testing db. Can be set
+    in `etc/mandyville/config.yaml` instead.
+  * `MANDYVILLE_DB_PASS` - the password of your testing db. Can be set
+    in `etc/mandyville/config.yaml` instead.
+  * `PERL5LIB` - the path to your `cpanm` dependencies 
 
 ### TODO
 
