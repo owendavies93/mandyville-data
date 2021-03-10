@@ -57,13 +57,14 @@ sub config($path = $PATH) {
 
 =cut
 
+# TODO: move into utils
 sub _find_local_config($file, $depth = 0, $dir = __DIR__) {
     if (-f "$dir/$file") {
         return "$dir/$file";
     } elsif ($dir ne '/' && $depth < $MAX_DEPTH) {
         return _find_local_config($file, $depth + 1, realpath("$dir/.."));
     } else {
-        die "Could not find '$file' relative to '__DIR__'."
+        die "Could not find '$file' relative to '" . __DIR__ . "'.";
     }
 }
 
