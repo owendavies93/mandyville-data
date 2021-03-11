@@ -61,6 +61,8 @@ has 'conf' => sub {
 =cut
 
 sub DESTROY($self) {
+    # XXX: the Mandyville::Database object needs to be predeclared, otherwise
+    #      this is called too early.
     if (defined $Test::Builder::VERSION && defined $self->{test_db_handle}) {
         $self->{test_db_handle}->disconnect
             or warn $self->{test_db_handle}->errstr;
