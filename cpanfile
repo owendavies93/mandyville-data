@@ -8,6 +8,7 @@ requires 'Dir::Self';
 requires 'DBD::Pg';
 requires 'DBI';
 requires 'File::Temp';
+requires 'SQL::Abstract::More';
 requires 'YAML::XS';
 
 # tests
