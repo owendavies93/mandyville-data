@@ -178,7 +178,7 @@ sub _db_handle($self, $ro = 0) {
         # Add the base data to the database
         my $base_data_file = $meta_directory . $BASE_DATA;
         my $status = system(
-            "psql $migration_dsn < \Q$base_data_file"
+            "psql $migration_dsn < \Q$base_data_file\E"
         );
 
         if ($status != 0) {
