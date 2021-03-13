@@ -22,8 +22,3 @@ Data fetching, external API interaction and data storage for mandyville.
     in `etc/mandyville/config.yaml` instead.
   * `PERL5LIB` - the path to your `cpanm` dependencies 
 
-### TODO
-
-* [ ] Packaging
-* [ ] Deployment
-* [ ] Proper issue tracking
