@@ -110,7 +110,7 @@ sub get_competition_data($self) {
         my $country_id = $self->countries->get_country_id($country_name);
 
         if (!defined $country_id) {
-            warn "Skipping unknown country $country_name";
+            warn "Skipping unknown country $country_name\n";
             next;
         }
 

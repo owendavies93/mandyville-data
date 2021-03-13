@@ -130,7 +130,7 @@ use Mandyville::Competitions;
     });
 
     warning_is { $comp->get_competition_data }
-               "Skipping unknown country $fake_name",
+               "Skipping unknown country $fake_name\n",
                'get_competition_data: correctly warns for unknown country';
 }
 
