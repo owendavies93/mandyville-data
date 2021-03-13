@@ -5,4 +5,4 @@ use warnings;
 
 use Test::Perl::Critic (-profile => 't/criticrc');
 
-all_critic_ok(qw( lib ));
+all_critic_ok(qw( bin lib ));
