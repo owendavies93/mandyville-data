@@ -54,5 +54,28 @@ use Mandyville::Countries;
     cmp_ok( $id, '>', 0, 'get_country_id: positive ID returned' );
 }
 
+######
+# TEST get_country_name
+######
+
+{
+    my $db = Mandyville::Database->new;
+    my $countries = Mandyville::Countries->new({
+        dbh  => $db->rw_db_handle(),
+        sqla => SQL::Abstract::More->new,
+    });
+
+    dies_ok { $countries->get_country_name() }
+            'get_country_name: dies without name parameter';
+
+    my $name = $countries->get_country_name(-1);
+
+    ok( !$name, 'get_country_name: invalid ID returns no name' );
+
+    $name = $countries->get_country_name(1);
+
+    ok( $name, 'get_country_name: country returned' );
+}
+
 done_testing();
 

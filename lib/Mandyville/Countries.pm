@@ -92,6 +92,25 @@ sub get_country_id($self, $name) {
     return $id;
 }
 
+=item get_country_name ( ID )
+
+  Get the name associated with the country with the ID C<ID>. Returns
+  undef if no country ID matches. Dies if C<ID> is not provided.
+
+=cut
+
+sub get_country_name($self, $id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => qw(name),
+        -from    => 'countries',
+        -where   => { id => $id },
+    );
+
+    my ($name) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    return $name;
+}
+
 =back
 
 =cut
