@@ -1,8 +1,9 @@
 #!/usr/bin/env perl
 
-use Mojo::Base -strict;
+use Mojo::Base -strict, -signatures;
 
 use Mojo::JSON qw(decode_json encode_json);
+use Mojo::Message::Response;
 use Overload::FileCheck qw(mock_file_check unmock_file_check);
 use Test::Exception;
 use Test::MockObject::Extends;
@@ -39,11 +40,12 @@ use Mandyville::API::FootballData;
 {
     my $path = 'test';
     my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
+
     my $call_count = 0;
 
     $mock_ua->mock( 'get', sub {
         $call_count++;
-        return encode_json({ "called" => 1 })
+        return _get_tx({ called => 1 })
     });
 
     my $api = Mandyville::API::FootballData->new;
@@ -80,19 +82,17 @@ use Mandyville::API::FootballData;
     my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
 
     $mock_ua->mock( 'get', sub {
-        my $data = {
+        return _get_tx({
             count => 1,
             competitions => [{
                 id   => 1,
                 name => 'Premier League',
             }]
-        };
-        return encode_json($data);
+        })
     });
 
     my $api = Mandyville::API::FootballData->new;
     $api->ua($mock_ua);
-
     my $response = $api->competitions;
     
     cmp_ok( $response->{count}, '==', 1, 'competitions: correct count' );
@@ -100,6 +100,20 @@ use Mandyville::API::FootballData;
     my $name = $response->{competitions}->[0]->{name};
 
     cmp_ok( $name, 'eq', 'Premier League', 'competitions: correct count' );
+}
+
+sub _get_tx($body) {
+    my $mock_tx = Test::MockObject::Extends->new( 'Mojo::Transaction::HTTP' );
+
+    $mock_tx->mock( 'res', sub {
+        my $res = Mojo::Message::Response->new;
+        $res->parse("HTTP/1.0 200 OK\x0d\x0a");
+        $res->parse("Content-Type: text/plain\x0d\x0a\x0d\x0a");
+        $res->parse(encode_json($body));
+        return $res;
+    });
+    
+    return $mock_tx;
 }
 
 done_testing;

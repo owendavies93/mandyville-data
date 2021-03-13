@@ -72,7 +72,7 @@ sub _get($self, $path) {
     my $json = $self->ua->get(
         $BASE_URL . $path,
         { 'X-Auth-Token' => $self->conf->{football_data}->{api_token} }
-    );
+    )->res->body;
 
     my $fh = File::Temp->new( UNLINK => 0, SUFFIX => '.json' );
     $self->cache->{$path} = $fh->filename;
