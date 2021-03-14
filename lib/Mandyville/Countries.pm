@@ -111,6 +111,25 @@ sub get_country_name($self, $id) {
     return $name;
 }
 
+=item get_id_for_alternate_name( NAME )
+
+  Get the country ID associated with the alternate name C<NAME>. Returns
+  undef if the alternate name isn't known.
+
+=cut
+
+sub get_id_for_alternate_name($self, $name) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => qw(country_id),
+        -from    => 'country_alternate_names',
+        -where   => { alternate_name => $name },
+    );
+
+    my ($country_id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    return $country_id;
+}
+
 =back
 
 =cut

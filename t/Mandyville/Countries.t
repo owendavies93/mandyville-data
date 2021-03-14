@@ -77,5 +77,28 @@ use Mandyville::Countries;
     ok( $name, 'get_country_name: country returned' );
 }
 
+######
+# TEST get_id_for_alternate_name
+######
+
+{
+    my $db = Mandyville::Database->new;
+    my $countries = Mandyville::Countries->new({
+        dbh  => $db->rw_db_handle(),
+        sqla => SQL::Abstract::More->new,
+    });
+
+    dies_ok { $countries->get_id_for_alternate_name() }
+            'get_id_for_alternate_name: dies without name parameter';
+
+    my $id = $countries->get_id_for_alternate_name('Fictional');
+
+    ok( !$id, 'get_id_for_alternate_name: invalid name returns no ID' );
+
+    $id = $countries->get_id_for_alternate_name('United States');
+
+    cmp_ok( $id, '==', 237, 'get_id_for_alternate_name: correct ID returned' );
+}
+
 done_testing();
 
