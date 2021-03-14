@@ -1,20 +1,20 @@
-Name:	    mandyville-data	
-Version:	0.1
-Release:	1%{?dist}
-Summary:	Data fetching and data storage for mandyville.
+Name:       mandyville-data
+Version:    0.1
+Release:    1%{?dist}
+Summary:    Data fetching and data storage for mandyville.
 
-License:	MIT
-URL:		https://github.com/sirgraystar/mandyville-data
+License:    MIT
+URL:        https://github.com/sirgraystar/mandyville-data
 Source0:    %{name}-%{version}-%{release}.tar.gz
 
-Requires:   perl(Capture::Tiny)
-Requires:	perl(Const::Fast)
-Requires:	perl(Dir::Self)
-Requires:	perl(DBD::Pg)
-Requires:	perl(DBI)
-Requires:	perl(File::Temp)
-Requires:   perl(SQL::Abstract::More)
-Requires:	perl(YAML::XS)
+Requires:    perl(Capture::Tiny)
+Requires:    perl(Const::Fast)
+Requires:    perl(Dir::Self)
+Requires:    perl(DBD::Pg)
+Requires:    perl(DBI)
+Requires:    perl(File::Temp)
+Requires:    perl(SQL::Abstract::More)
+Requires:    perl(YAML::XS)
 
 %description
 Data fetching and data storage for mandyville.
