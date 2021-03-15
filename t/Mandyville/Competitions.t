@@ -58,14 +58,14 @@ use Mandyville::Competitions;
     my $country = 'Argentina';
     my $comp_name = 'Primera B Nacional';
     my $country_id = $countries->get_country_id($country);
-    my $comp_data = $comp->get_or_insert($comp_name, $country_id);
+    my $comp_data = $comp->get_or_insert($comp_name, $country_id, 2000, 1);
 
     cmp_ok( $comp_data->{country_name}, 'eq', $country,
             'get_or_insert: data matches' );
 
     my $id = $comp_data->{id};
 
-    $comp_data = $comp->get_or_insert($comp_name, $country_id);
+    $comp_data = $comp->get_or_insert($comp_name, $country_id, 2000, 1);
 
     cmp_ok( $comp_data->{id}, '==', $id, 'get_or_insert: get matches insert' );
 }
@@ -84,6 +84,8 @@ use Mandyville::Competitions;
 
     my $country = 'Argentina';
     my $comp_name = 'Primera B Nacional';
+    my $plan = 'TIER_ONE';
+    my $football_data_id = 2003;
 
     my $mock_api = Test::MockObject::Extends->new(
         'Mandyville::API::FootballData'
@@ -96,6 +98,8 @@ use Mandyville::Competitions;
                     name => $country,
                 },
                 name => $comp_name,
+                plan => $plan,
+                id   => $football_data_id,
             }]
         };
         return $hash; 
@@ -114,6 +118,13 @@ use Mandyville::Competitions;
 
     cmp_ok( $data->[0]->{country_name}, 'eq', $country,
             'get_competition_data: correct country' );
+
+    cmp_ok( $data->[0]->{football_data_id}, '==', $football_data_id,
+            'get_competition_data: correct football data ID' );
+
+    cmp_ok( $data->[0]->{football_data_plan}, '==',
+            $comp->_plan_name_to_number($plan),
+            'get_competition_data: correct football data plan number' );
 
     my $first_id = $data->[0]->{id};
 
@@ -135,6 +146,29 @@ use Mandyville::Competitions;
 
     cmp_ok( $data->[0]->{country_name}, 'eq', $country_full_name,
             'get_competition_data: returns full name not alternative name' );
+}
+
+######
+# TEST _plan_name_to_number
+######
+
+{
+    my $comp = Mandyville::Competitions->new({});
+    my $plan_map = {
+        'TIER_ONE'   => 1,
+        'TIER_TWO'   => 2,
+        'TIER_THREE' => 3,
+        'TIER_FOUR'  => 4,
+    };
+
+    foreach my $p (keys %$plan_map) {
+        my $num = $plan_map->{$p};
+        cmp_ok( $comp->_plan_name_to_number($p), '==', $num,
+                "_plan_name_to_number: $p mapping matches" );
+    }
+
+    dies_ok { $comp->_plan_name_to_number('foo') }
+            '_plan_name_to_number: croaks on invalid tier nanme';
 }
 
 done_testing();

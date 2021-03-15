@@ -6,6 +6,7 @@ use Mandyville::API::FootballData;
 use Mandyville::Countries;
 use Mandyville::Database;
 
+use Carp;
 use SQL::Abstract::More;
 
 =head1 NAME
@@ -108,6 +109,8 @@ sub get_competition_data($self) {
 
     foreach my $comp (@{$comps->{competitions}}) {
         my $country_name = $comp->{area}->{name};
+        my $football_data_id = $comp->{id};
+        my $football_data_plan = $self->_plan_name_to_number($comp->{plan});
         my $country_id = $self->countries->get_country_id($country_name);
 
         if (!defined $country_id) {
@@ -123,7 +126,10 @@ sub get_competition_data($self) {
         }
 
         my $comp_name = $comp->{name};
-        my $comp_data = $self->get_or_insert($comp_name, $country_id);
+        my $comp_data = $self->get_or_insert(
+            $comp_name, $country_id, $football_data_id, $football_data_plan
+        );
+
         push @$data, $comp_data;
     }
     return $data;
@@ -138,7 +144,9 @@ sub get_competition_data($self) {
 
 =cut
 
-sub get_or_insert($self, $name, $country_id) {
+sub get_or_insert(
+    $self, $name, $country_id, $football_data_id, $football_data_plan) {
+
     my ($stmt, @bind) = $self->sqla->select(
         -columns => [ qw(cp.id ct.name|country_name) ],
         -from    => [ -join => qw(
@@ -158,8 +166,10 @@ sub get_or_insert($self, $name, $country_id) {
         ($stmt, @bind) = $self->sqla->insert(
             -into      => 'competitions',
             -values    => {
-                name       => $name,
-                country_id => $country_id,
+                name               => $name,
+                country_id         => $country_id,
+                football_data_id   => $football_data_id,
+                football_data_plan => $football_data_plan,
             },
             -returning => 'id',
         );
@@ -174,14 +184,25 @@ sub get_or_insert($self, $name, $country_id) {
     }
 
     return {
-        id           => $id,
-        name         => $name,
-        country_name => $country,
+        id                 => $id,
+        name               => $name,
+        country_name       => $country,
+        football_data_id   => $football_data_id,
+        football_data_plan => $football_data_plan,
     };
 }
 
 =back
 
 =cut
+
+sub _plan_name_to_number($self, $plan_name) {
+    return 1 if $plan_name eq 'TIER_ONE';
+    return 2 if $plan_name eq 'TIER_TWO';
+    return 3 if $plan_name eq 'TIER_THREE';
+    return 4 if $plan_name eq 'TIER_FOUR';
+
+    croak "Invalid plan name $plan_name";
+}
 
 1;
