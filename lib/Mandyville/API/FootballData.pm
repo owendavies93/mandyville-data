@@ -46,6 +46,23 @@ has 'ua'     => sub { Mojo::UserAgent->new->connect_timeout(20) };
 
 =over
 
+=item competition_season_matches( ID, SEASON )
+
+  Fetch the matches for the competition associated with C<ID> in
+  the season C<SEASON>. Note that C<ID> is the football data ID
+  for the competition here, and not the C<id> field in the
+  mandyville database.
+
+  C<SEASON> should be defined as a YYYY format year, and is the
+  year that the season started in. So for the 2020-2021 season,
+  you would provide C<2020>.
+
+=cut
+
+sub competition_season_matches($self, $id, $season) {
+    return $self->get("competitions/$id/matches?season=$season");
+}
+
 =item competitions
 
   Fetch the top level competition data for all known competitions
