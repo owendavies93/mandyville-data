@@ -105,13 +105,21 @@ sub new($class, $options) {
 sub get_competition_data($self) {
     my $comps = $self->api->competitions;
     my $data = [];
+
     foreach my $comp (@{$comps->{competitions}}) {
         my $country_name = $comp->{area}->{name};
         my $country_id = $self->countries->get_country_id($country_name);
 
         if (!defined $country_id) {
-            warn "Skipping unknown country $country_name\n";
-            next;
+            my $alternate_id =
+                $self->countries->get_id_for_alternate_name($country_name);
+
+            if (!defined $alternate_id) {
+                warn "Skipping unknown country $country_name\n";
+                next;
+            } else {
+                $country_id = $alternate_id;
+            }
         }
 
         my $comp_name = $comp->{name};
@@ -156,7 +164,11 @@ sub get_or_insert($self, $name, $country_id) {
             -returning => 'id',
         );
 
-        $id = $self->dbh->do($stmt, undef, @bind);
+        # This looks unusual but because the insert statement returns an
+        # ID, you actually need to use a DBI method that returns data,
+        # and you can't just use do() like one normally would in this
+        # situation
+        ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
 
         $country = $self->countries->get_country_name($country_id);
     }

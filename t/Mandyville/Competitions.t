@@ -115,13 +115,26 @@ use Mandyville::Competitions;
     cmp_ok( $data->[0]->{country_name}, 'eq', $country,
             'get_competition_data: correct country' );
 
-    my $fake_name = 'Fictional';
+    my $first_id = $data->[0]->{id};
 
     $country = 'Fictional';
 
     warning_is { $comp->get_competition_data }
                "Skipping unknown country $country\n",
                'get_competition_data: correctly warns for unknown country';
+
+    $country = 'United States';
+    my $country_full_name = 'United States of America';
+
+    $data = $comp->get_competition_data;
+
+    cmp_ok( scalar @$data, '==', 1, 'get_competition_data: correct length' );
+
+    cmp_ok( $data->[0]->{id}, '!=', $first_id,
+            'get_competition_data: inserted IDs are different' );
+
+    cmp_ok( $data->[0]->{country_name}, 'eq', $country_full_name,
+            'get_competition_data: returns full name not alternative name' );
 }
 
 done_testing();
