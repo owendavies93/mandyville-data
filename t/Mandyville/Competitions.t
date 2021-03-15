@@ -117,20 +117,10 @@ use Mandyville::Competitions;
 
     my $fake_name = 'Fictional';
 
-    $mock_api->mock( 'competitions', sub {
-        my $hash = {
-            competitions => [{
-                area => {
-                    name => $fake_name,
-                },
-                name => $comp_name,
-            }]
-        };
-        return $hash; 
-    });
+    $country = 'Fictional';
 
     warning_is { $comp->get_competition_data }
-               "Skipping unknown country $fake_name\n",
+               "Skipping unknown country $country\n",
                'get_competition_data: correctly warns for unknown country';
 }
 
