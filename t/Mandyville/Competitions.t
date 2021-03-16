@@ -149,6 +149,48 @@ use Mandyville::Competitions;
 }
 
 ######
+# TEST get_by_football_data_id
+######
+
+{
+    my $country = 'Argentina';
+    my $comp_name = 'Primera B Nacional';
+    my $plan = 'TIER_ONE';
+    my $football_data_id = 2003;
+
+    my $dbh  = Mandyville::Database->new;
+    my $sqla = SQL::Abstract::More->new;
+    my $countries = Mandyville::Countries->new({
+        dbh  => $dbh->rw_db_handle(),
+        sqla => $sqla,
+    });
+
+    my $comp = Mandyville::Competitions->new({
+        countries => $countries,
+        dbh       => $dbh->rw_db_handle(),
+        sqla      => $sqla,
+    });
+
+    dies_ok { $comp->get_by_football_data_id() }
+            'get_by_football_data_id: dies without id param';
+
+    my $data = $comp->get_by_football_data_id($football_data_id);
+
+    ok( !$data, 'get_by_football_data_id: returns undef when ID not found' );
+
+    my $country_id = $countries->get_country_id($country);
+    my $plan_id = $comp->_plan_name_to_number($plan);
+    my $comp_data = $comp->get_or_insert(
+        $comp_name, $country_id, $football_data_id, $plan_id
+    );
+
+    $data = $comp->get_by_football_data_id($football_data_id);
+
+    cmp_ok( $data->{id}, '==', $comp_data->{id},
+          'get_by_football_data_id: correct ID returned' );
+}
+
+######
 # TEST _plan_name_to_number
 ######
 

@@ -146,6 +146,42 @@ sub get_competition_data($self) {
     return $data;
 }
 
+=item get_by_football_data_id( FOOTBAL_DATA_ID )
+
+  Get the competition associated with the given C<FOOTBAL_DATA_ID>. Returns
+  undef if no competition is found. Returns a hashref of the competition
+  data with the C<name>, C<id>, C<country_name>, C<football_data_id> and
+  C<football_data_plan> attributes.
+
+=cut
+
+sub get_by_football_data_id($self, $football_data_id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => [ qw(cp.id cp.name ct.name|country_name
+                         cp.football_data_plan) ],
+        -from    => [ -join => qw(
+            competitions|cp <=>{cp.country_id=ct.id} countries|ct
+        )],
+        -where   => {
+            'cp.football_data_id' => $football_data_id
+        }
+    );
+
+    my ($id, $name, $country_name, $plan) = $self->dbh->selectrow_array(
+        $stmt, undef, @bind
+    );
+
+    return unless defined $id;
+
+    return {
+        id                 => $id,
+        name               => $name,
+        country_name       => $country_name,
+        football_data_id   => $football_data_id,
+        football_data_plan => $plan,
+    };
+}
+
 =item get_or_insert( NAME, COUNTRY_ID, FOOTBAL_DATA_ID, FOOTBALL_DATA_PLAN )
 
   Fetch the competition associated with C<NAME> and C<COUNTRY_ID>. If the
