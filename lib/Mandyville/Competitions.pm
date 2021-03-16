@@ -19,10 +19,16 @@ use SQL::Abstract::More;
   my $api  = Mandyville::API::FootballData->new;
   my $dbh  = Mandyville::Database->new->rw_db_handle();
   my $sqla = SQL::Abstract::More->new;
-  my $comp = Mandyville::Competitions->new({
-      api  => $api,
-      dbh  => $dbh,
+  my $countries = Mandyville::Countries->new({
+      dbh  => $dbh->rw_db_handle(),
       sqla => $sqla,
+  });
+
+  my $comp = Mandyville::Competitions->new({
+      api       => $api,
+      countries => $countries,
+      dbh       => $dbh,
+      sqla      => $sqla,
   });
   $comp->get_competition_data;
 
@@ -38,6 +44,10 @@ use SQL::Abstract::More;
 =item api
 
   An instance of Mandyville::API::FootballData.
+
+=item countries
+
+  An instance of Mandyville::Countries.
 
 =item dbh
 
@@ -56,13 +66,14 @@ has 'sqla'      => sub { shift->{sqla} };
 
 =item new ([ OPTIONS ])
 
-  Creates a new instance of the module, and sets the C<dbh> and C<slqa>
+  Creates a new instance of the module, and sets the various required
   attributes. C<OPTIONS> is a hashref that can contain the following
   fields:
 
-    * api  => An instance of Mandyville::API::FootballData
-    * dbh  => A read-write handle to the Mandyville database
-    * sqla => An instance of SQL::Abstract::More
+    * api       => An instance of Mandyville::API::FootballData
+    * countries => An instance of Mandyville::Countries
+    * dbh       => A read-write handle to the Mandyville database
+    * sqla      => An instance of SQL::Abstract::More
 
   If these options aren't passed in, they will be instantied by this
   method. However, it's recommended to pass these options in for 
@@ -135,12 +146,13 @@ sub get_competition_data($self) {
     return $data;
 }
 
-=item get_or_insert( NAME, COUNTRY_ID )
+=item get_or_insert( NAME, COUNTRY_ID, FOOTBAL_DATA_ID, FOOTBALL_DATA_PLAN )
 
   Fetch the competition associated with C<NAME> and C<COUNTRY_ID>. If the
   competition doesn't exist, insert it into the database. Returns a hashref
   of the competition data that was either fetched or inserted, with the 
-  C<name>, C<id> and C<country_name> attributes.
+  C<name>, C<id>, C<country_name>, C<football_data_id> and
+  C<football_data_plan> attributes.
 
 =cut
 
