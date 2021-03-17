@@ -102,6 +102,63 @@ use Mandyville::API::FootballData;
     cmp_ok( $name, 'eq', 'Premier League', 'competitions: correct count' );
 }
 
+######
+# TEST competition_season_matches
+######
+
+{
+    my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
+
+    my $message = 'Problem Problem!';
+    $mock_ua->mock( 'get', sub {
+        return _get_tx({
+            error   => 404,
+            message => $message,
+        });
+    });
+
+    my $api = Mandyville::API::FootballData->new;
+    $api->ua($mock_ua);
+
+    dies_ok { $api->competition_season_matches() }
+              'competition_season_matches: dies without args';
+
+    throws_ok { $api->competition_season_matches(10, 300) } qr/Not found/,
+                'competition_season_matches: croaks on 404';
+
+    $mock_ua->mock( 'get', sub {
+        return _get_tx({
+            error   => 403,
+            message => $message,
+        });
+    });
+
+    throws_ok { $api->competition_season_matches(20, 300) } qr/Restricted/,
+                'competition_season_matches: croaks on 403';
+
+    $mock_ua->mock( 'get', sub {
+        return _get_tx({
+            error   => 503,
+            message => $message,
+        });
+    });
+
+    throws_ok { $api->competition_season_matches(20, 400) } qr/Unknown error/,
+                'competition_season_matches: dies on unknown error';
+
+    $mock_ua->mock( 'get', sub {
+        return _get_tx({
+            match => {
+                id => 1,
+            }
+        });
+    });
+
+    my $data = $api->competition_season_matches(30, 400);
+
+    ok( $data->{match}, 'competition_season_matches: data returned' );
+}
+
 sub _get_tx($body) {
     my $mock_tx = Test::MockObject::Extends->new( 'Mojo::Transaction::HTTP' );
 

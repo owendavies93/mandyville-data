@@ -59,8 +59,21 @@ has 'ua'     => sub { Mojo::UserAgent->new->connect_timeout(20) };
 
 =cut
 
+# TODO: deal with error states when season is out of range
 sub competition_season_matches($self, $id, $season) {
-    return $self->get("competitions/$id/matches?season=$season");
+    my $response = $self->_get("competitions/$id/matches?season=$season");
+
+    if (defined $response->{error}) {
+        if ($response->{error} == 404) {
+            croak "Not found: " . $response->{message};
+        } elsif ($response->{error} == 403) {
+            croak "Restricted: " . $response->{message};
+        }
+
+        die "Unknown error from API: $response->{message}";
+    }
+
+    return $response;
 }
 
 =item competitions
