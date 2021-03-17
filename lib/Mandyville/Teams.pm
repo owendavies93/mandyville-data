@@ -64,8 +64,8 @@ sub new($class, $options) {
     $options->{sqla} //= SQL::Abstract::More->new;
 
     my $self = {
-        dbh       => $options->{dbh},
-        sqla      => $options->{sqla},
+        dbh  => $options->{dbh},
+        sqla => $options->{sqla},
     };
 
     bless $self, $class;
