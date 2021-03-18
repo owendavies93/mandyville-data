@@ -72,22 +72,20 @@ sub new($class, $options) {
     return $self;
 }
 
-=item get_or_insert ( NAME, COUNTRY_ID, FOOTBAL_DATA_ID ) 
+=item get_or_insert ( NAME, FOOTBAL_DATA_ID )
 
-  Fetch the team assoicated with the C<NAME>, C<COUNTRY_ID> and 
-  C<FOOTBAL_DATA_ID>. If the team isn't found, the team is inserted
-  into the database. Returns a hashref of the team data that was either
-  fetched or inserted, with the C<name>, C<id>, C<country_id> and
-  C<football_data_id> attributes.
+  Fetch the team assoicated with the C<NAME> and C<FOOTBAL_DATA_ID>.
+  If the team isn't found, the team is inserted into the database.
+  Returns a hashref of the team data that was either fetched or
+  inserted, with the C<name>, C<id> and C<football_data_id> attributes.
 
 =cut
 
-sub get_or_insert($self, $name, $country_id, $football_data_id) {
+sub get_or_insert($self, $name, $football_data_id) {
     my ($stmt, @bind) = $self->sqla->select(
         -columns => 'id',
         -from    => 'teams',
         -where   => {
-            'country_id'       => $country_id,
             'football_data_id' => $football_data_id,
             'name'             => $name,
         }
@@ -99,7 +97,6 @@ sub get_or_insert($self, $name, $country_id, $football_data_id) {
         ($stmt, @bind) = $self->sqla->insert(
             -into      => 'teams',
             -values    => {
-                'country_id'       => $country_id,
                 'football_data_id' => $football_data_id,
                 'name'             => $name,
             },
@@ -111,7 +108,6 @@ sub get_or_insert($self, $name, $country_id, $football_data_id) {
 
     return {
         id               => $id,
-        country_id       => $country_id,
         name             => $name,
         football_data_id => $football_data_id,
     };

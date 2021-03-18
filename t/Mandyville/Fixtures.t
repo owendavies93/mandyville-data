@@ -56,8 +56,8 @@ use Mandyville::Fixtures;
 
     my $home = 'Atlético de Rafaela';
     my $away = 'Villa Dálmine';
-    my $home_team_data = $teams->get_or_insert($home, $country_id, 1);
-    my $away_team_data = $teams->get_or_insert($away, $country_id, 2);
+    my $home_team_data = $teams->get_or_insert($home, 1);
+    my $away_team_data = $teams->get_or_insert($away, 2);
     my $home_team_id = $home_team_data->{id};
     my $away_team_id = $away_team_data->{id};
 

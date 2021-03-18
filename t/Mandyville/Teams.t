@@ -24,9 +24,6 @@ use Mandyville::Teams;
 
 {
     my $db = Mandyville::Database->new;
-    my $countries = Mandyville::Countries->new({
-        dbh => $db->rw_db_handle(),
-    });
 
     my $teams = Mandyville::Teams->new({
         dbh => $db->rw_db_handle(),
@@ -34,18 +31,17 @@ use Mandyville::Teams;
 
     my $football_data_id = 100;
     my $name = 'Chelsea';
-    my $country_id = $countries->get_country_id('England');
 
     dies_ok { $teams->get_or_insert(); } 'get_or_insert: dies without args';
 
-    my $data = $teams->get_or_insert($name, $country_id, $football_data_id);
+    my $data = $teams->get_or_insert($name, $football_data_id);
     my $id   = $data->{id};
 
     ok( $id, 'get_or_insert: id returned after insert' );
 
     cmp_ok( $data->{name}, 'eq', $name, 'get_or_insert: name matches' );
 
-    $data = $teams->get_or_insert($name, $country_id, $football_data_id);
+    $data = $teams->get_or_insert($name, $football_data_id);
 
     cmp_ok( $data->{id}, '==', $id, 'get_or_insert: id matches after get' );
 }
@@ -76,7 +72,7 @@ use Mandyville::Teams;
     my $comp_id = '2000';
 
     my $comp    = $comps->get_or_insert($comp_name, $country_id, $comp_id, 1);
-    my $team    = $teams->get_or_insert($name, $country_id, $football_data_id);
+    my $team    = $teams->get_or_insert($name, $football_data_id);
     my $team_id = $team->{id};
 
     dies_ok { $teams->get_or_insert_team_comp() }
