@@ -1,12 +1,15 @@
 #!/usr/bin/env perl
 
-use Mojo::Base -strict;
+use Mojo::Base -strict, -signatures;
 
 use Mandyville::Countries;
 use Mandyville::Competitions;
 use Mandyville::Database;
 use Mandyville::Teams;
+use Mandyville::Utils qw(find_file);
 
+use Mojo::File;
+use Mojo::JSON qw(decode_json);
 use SQL::Abstract::More;
 use Test::Exception;
 use Test::More;
@@ -91,5 +94,56 @@ use Mandyville::Fixtures;
     cmp_ok( $fixture_data->{id}, '==', $id );
 }
 
+######
+# TEST process_fixture_data
+######
+
+{
+    my $dbh  = Mandyville::Database->new;
+    my $sqla = SQL::Abstract::More->new;
+    my $teams = Mandyville::Teams->new({
+        dbh => $dbh->rw_db_handle(),
+    });
+
+    my $countries = Mandyville::Countries->new({
+        dbh => $dbh->rw_db_handle(),
+    });
+
+    my $comp = Mandyville::Competitions->new({
+        countries => $countries,
+        dbh       => $dbh->rw_db_handle(),
+    });
+
+    my $fixtures = Mandyville::Fixtures->new({
+        comps => $comp,
+        dbh   => $dbh->rw_db_handle(),
+        sqla  => $sqla,
+        teams => $teams,
+    });
+
+    my $country_id = $countries->get_country_id('Europe');
+    my $comp_id = $comp->get_or_insert(
+        'UEFA Champions League', $country_id, '2001', 1
+    );
+
+    dies_ok { $fixtures->process_fixture_data() }
+              'process_fixture_data: dies without args';
+
+    my $fixture_info = _load_test_json('match.json');
+
+    my $data = $fixtures->process_fixture_data($fixture_info);
+
+    ok( $data->{id}, 'process_fixture_data: inserts correctly' );
+
+    cmp_ok( $data->{away_team_goals}, '==', 1,
+            'process_fixture_data: correct match info' );
+}
+
 done_testing();
+
+sub _load_test_json($filename) {
+    my $full_path = find_file("t/data/$filename");
+    my $json = Mojo::File->new($full_path)->slurp;
+    return decode_json($json);
+}
 
