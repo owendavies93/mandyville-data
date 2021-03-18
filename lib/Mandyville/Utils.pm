@@ -2,7 +2,13 @@ package Mandyville::Utils;
 
 use Mojo::Base 'Exporter', -signatures;
 
-our @EXPORT_OK = qw(debug msg);
+use Const::Fast;
+use Cwd qw(realpath);
+use Dir::Self;
+
+our @EXPORT_OK = qw(debug find_file msg);
+
+const my $MAX_DEPTH => 5;
 
 =head1 NAME
 
@@ -37,6 +43,18 @@ sub debug($text) {
     return $msg;
 }
 
+=item find_file ( FILE )
+
+  Finds the relative path to C<FILE> from the current directory. Searches
+  upwards to 5 levels. If the full relative path from a parent of the
+  current directory isn't provided, the file won't be found.
+
+=cut
+
+sub find_file($file) {
+    return _find($file, 0, __DIR__);
+}
+
 =item msg ( TEXT )
 
   Print a message to STDOUT, including the name of the script that the
@@ -49,6 +67,16 @@ sub msg($text) {
     my $msg = _script() . ": $text";
     say $msg;
     return $msg;
+}
+
+sub _find($file, $depth = 0, $dir = __DIR__) {
+    if (-f "$dir/$file") {
+        return "$dir/$file";
+    } elsif ($dir ne '/' && $depth < $MAX_DEPTH) {
+        return _find($file, $depth + 1, realpath("$dir/.."));
+    } else {
+        die "Could not find '$file' relative to '" . __DIR__ . "'.";
+    }
 }
 
 sub _script {

@@ -1,19 +1,15 @@
 package Mandyville::Config;
 
-use Mojo::Base -strict, -signatures;
+use Mojo::Base 'Exporter', -signatures;
 
-use Const::Fast;
-use Cwd qw(realpath);
-use Dir::Self;
-use Exporter;
+use Mandyville::Utils qw(find_file);
+
 use YAML::XS qw(LoadFile);
+use Const::Fast;
 
-our (@ISA, @EXPORT_OK);
-@ISA = qw(Exporter);
-@EXPORT_OK = qw(config);
+our @EXPORT_OK = qw(config);
 
-const my $MAX_DEPTH => 5;
-const my $PATH      => $ENV{MANDYVILLE_CONFIG} || '/etc/mandyville/config.yaml';
+const my $PATH => $ENV{MANDYVILLE_CONFIG} || '/etc/mandyville/config.yaml';
 
 =head1 NAME
 
@@ -47,7 +43,7 @@ const my $PATH      => $ENV{MANDYVILLE_CONFIG} || '/etc/mandyville/config.yaml';
 
 sub config($path = $PATH) {
     if (defined $Test::Builder::VERSION) {
-        return LoadFile(_find_local_config($path));
+        return LoadFile(find_file($path));
     }
 
     return LoadFile($path)
@@ -57,15 +53,5 @@ sub config($path = $PATH) {
 
 =cut
 
-# TODO: move into utils
-sub _find_local_config($file, $depth = 0, $dir = __DIR__) {
-    if (-f "$dir/$file") {
-        return "$dir/$file";
-    } elsif ($dir ne '/' && $depth < $MAX_DEPTH) {
-        return _find_local_config($file, $depth + 1, realpath("$dir/.."));
-    } else {
-        die "Could not find '$file' relative to '" . __DIR__ . "'.";
-    }
-}
-
 1;
+
