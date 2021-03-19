@@ -2,8 +2,6 @@
 
 use Mojo::Base -strict;
 
-use lib 'lib';
-
 use Mandyville::API::FootballData;
 use Mandyville::Competitions;
 use Mandyville::Countries;
@@ -32,4 +30,15 @@ msg "Updating competition information";
 $comp->get_competition_data;
 
 msg "Done";
+
+=head1 NAME
+
+  update-competition-data
+
+=head1 DESCRIPTION
+
+  Fetches data about all known competitions from the football-data API
+  and add any missing competitions to the mandyville database.
+
+=cut
 
