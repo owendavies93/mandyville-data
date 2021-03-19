@@ -11,6 +11,15 @@ Data fetching, external API interaction and data storage for mandyville.
 * Perl 5.20+
 * Everything in the `cpanfile` in the root of this repo
 
+If you've installed your dependancies locally, you'll need to set
+`PERL5LIB` to the path to those when running the scripts in `/bin`.
+You'll also need to pass the `-I` flag if you're running on a machine
+where the mandyville libs aren't installed:
+
+```
+PERL5LIB=/path/to/deps/lib/perl5/ perl -Ilib ./bin/update-competition-data
+```
+
 #### Testing
 * Install `cpanm` with `dnf install cpanminus`
 * Run `cpanm --installdeps --notest .` to fetch the dependancies
