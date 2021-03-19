@@ -191,6 +191,48 @@ use Mandyville::Competitions;
 }
 
 ######
+# TEST get_by_plan
+######
+
+{
+    my $country = 'Argentina';
+    my $comp_name = 'Primera B Nacional';
+    my $plan = 'TIER_ONE';
+    my $football_data_id = 2003;
+
+    my $dbh  = Mandyville::Database->new;
+    my $sqla = SQL::Abstract::More->new;
+    my $countries = Mandyville::Countries->new({
+        dbh  => $dbh->rw_db_handle(),
+        sqla => $sqla,
+    });
+
+    my $comp = Mandyville::Competitions->new({
+        countries => $countries,
+        dbh       => $dbh->rw_db_handle(),
+        sqla      => $sqla,
+    });
+
+    my $country_id = $countries->get_country_id($country);
+    my $plan_id = $comp->_plan_name_to_number($plan);
+    my $comp_data = $comp->get_or_insert(
+        $comp_name, $country_id, $football_data_id, $plan_id
+    );
+
+    dies_ok { $comp->get_by_plan } 'get_by_plan: dies without args';
+
+    my $comps = $comp->get_by_plan(1);
+
+    cmp_ok( scalar @$comps, '==', 1,
+            'get_by_plan: correct number of comps returned' );
+
+    my $c = $comps->[0];
+
+    cmp_ok( $c->{id}, '==', $comp_data->{id},
+            'get_by_plan: correct competition returned' );
+}
+
+######
 # TEST _plan_name_to_number
 ######
 

@@ -146,7 +146,7 @@ sub get_competition_data($self) {
     return $data;
 }
 
-=item get_by_football_data_id( FOOTBAL_DATA_ID )
+=item get_by_football_data_id ( FOOTBAL_DATA_ID )
 
   Get the competition associated with the given C<FOOTBAL_DATA_ID>. Returns
   undef if no competition is found. Returns a hashref of the competition
@@ -182,7 +182,27 @@ sub get_by_football_data_id($self, $football_data_id) {
     };
 }
 
-=item get_or_insert( NAME, COUNTRY_ID, FOOTBAL_DATA_ID, FOOTBALL_DATA_PLAN )
+=item get_by_plan ( PLAN )
+
+  Get all competitions at the given football-data C<PLAN> tier. Returns an
+  arrayref of hashes, each member of which represents a competition.
+
+=cut
+
+sub get_by_plan($self, $plan) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => [ qw(id football_data_id country_id) ],
+        -from    => 'competitions',
+        -where   => {
+            'football_data_plan' => $plan,
+        }
+    );
+
+    my $comps = $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+    return $comps;
+}
+
+=item get_or_insert ( NAME, COUNTRY_ID, FOOTBAL_DATA_ID, FOOTBALL_DATA_PLAN )
 
   Fetch the competition associated with C<NAME> and C<COUNTRY_ID>. If the
   competition doesn't exist, insert it into the database. Returns a hashref
