@@ -173,8 +173,7 @@ sub get_or_insert($self, $comp_id, $home_id, $away_id, $season, $match_info) {
 
 =cut
 
-sub process_fixture_data($self, $api_data) {
-    my $fixture_data = $api_data->{match};
+sub process_fixture_data($self, $fixture_data) {
     for (qw(season homeTeam awayTeam competition score)) {
         croak "missing $_ attribute in fixture_data param"
             unless defined $fixture_data->{$_};
