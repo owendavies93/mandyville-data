@@ -66,7 +66,11 @@ sub competition_season_matches($self, $id, $season) {
     if (defined $response->{error}) {
         if ($response->{error} == 404) {
             croak "Not found: " . $response->{message};
-        } elsif ($response->{error} == 403) {
+        }
+
+        die "Unknown error from API: $response->{message}";
+    } elsif (defined $response->{errorCode}) {
+        if ($response->{errorCode} == 403) {
             croak "Restricted: " . $response->{message};
         }
 

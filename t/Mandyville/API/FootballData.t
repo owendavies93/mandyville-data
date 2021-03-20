@@ -128,8 +128,8 @@ use Mandyville::API::FootballData;
 
     $mock_ua->mock( 'get', sub {
         return _get_tx({
-            error   => 403,
-            message => $message,
+            errorCode => 403,
+            message   => $message,
         });
     });
 
@@ -146,6 +146,15 @@ use Mandyville::API::FootballData;
     throws_ok { $api->competition_season_matches(20, 400) } qr/Unknown error/,
                 'competition_season_matches: dies on unknown error';
 
+    $mock_ua->mock( 'get', sub {
+        return _get_tx({
+            errorCode => 503,
+            message   => $message,
+        });
+    });
+
+    throws_ok { $api->competition_season_matches(20, 400) } qr/Unknown error/,
+    
     $mock_ua->mock( 'get', sub {
         return _get_tx({
             match => {
