@@ -211,6 +211,8 @@ sub process_fixture_data($self, $fixture_data) {
         away_team_goals => $score->{awayTeam},
     };
 
+    die "Missing match result data" unless defined $score->{homeTeam};
+
     if ($score->{homeTeam} > $score->{awayTeam}) {
         $match_info->{winning_team_id} = $home->{id};
     } elsif ($score->{awayTeam} > $score->{homeTeam}) {

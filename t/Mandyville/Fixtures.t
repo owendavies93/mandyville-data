@@ -137,6 +137,11 @@ use Mandyville::Fixtures;
 
     cmp_ok( $data->{away_team_goals}, '==', 1,
             'process_fixture_data: correct match info' );
+
+    delete $fixture_info->{score}->{fullTime};
+
+    throws_ok { $fixtures->process_fixture_data($fixture_info) }
+                qr/Missing match/, 'process_fixture_data: dies without score';
 }
 
 done_testing();
