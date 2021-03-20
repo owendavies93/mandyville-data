@@ -1,0 +1,131 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict;
+
+use Mandyville::API::FootballData;
+use Mandyville::Competitions;
+use Mandyville::Countries;
+use Mandyville::Database;
+use Mandyville::Fixtures;
+use Mandyville::Teams;
+use Mandyville::Utils qw(debug msg);
+
+use Getopt::Long;
+use POSIX qw(strftime);
+use SQL::Abstract::More;
+use Try::Tiny;
+
+binmode(STDOUT, ":encoding(UTF-8)");
+
+my $season;
+
+GetOptions(
+    "season=i" => \$season,
+);
+
+if (!defined $season) {
+    msg 'Season not provided. Using default.';
+    my $year  = strftime "%Y", localtime;
+    my $month = strftime "%m", localtime;
+
+    if ($month < 7) {
+        msg "Month is $month, assume we're in the previous season";
+        $season = $year - 1;
+    } else {
+        $season = $year;
+    }
+}
+
+msg "Processing season $season";
+
+my $db   = Mandyville::Database->new;
+my $sqla = SQL::Abstract::More->new;
+
+my $api   = Mandyville::API::FootballData->new;
+my $comps = Mandyville::Competitions->new({
+    dbh  => $db->rw_db_handle(),
+    sqla => $sqla,
+});
+
+my $teams = Mandyville::Teams->new({
+    dbh  => $db->rw_db_handle(),
+    sqla => $sqla,
+});
+
+my $fixtures = Mandyville::Fixtures->new({
+    dbh   => $db->rw_db_handle(),
+    sqla  => $sqla,
+    teams => $teams,
+});
+
+my $valid_comps = $comps->get_by_plan(1);
+
+foreach my $comp (@$valid_comps) {
+    try {
+        my $fdi  = $comp->{football_data_id};
+        my $name = $comp->{name};
+
+        msg "Procesing $name";
+
+        my $season_data = $api->competition_season_matches($fdi, $season);
+        my $matches = $season_data->{matches};
+
+        foreach my $match_info (@$matches) {
+            $match_info->{competition} = {
+                id   => $fdi,
+                name => $name,
+            };
+            try {
+                $fixtures->process_fixture_data($match_info);
+            } catch {
+                if (/Missing match result data/) {
+                    debug "Skipping fixture with missing data";
+                } else {
+                    die "$_";
+                }
+            }
+        }
+
+        msg "Finished processing $name";
+    } catch {
+        if (/Not found/) {
+            debug "Season data not found, skipping";
+        } elsif (/Restricted/) {
+            debug "Season data not on this plan, skipping";
+        } else {
+            die "$_";
+        }
+    };
+
+    # Cope with football-data API rate limiting;
+    sleep(6);
+}
+
+=head1 NAME
+
+  update-fixture-data [ --season|-s SEASON ]
+
+=head1 DESCRIPTION
+
+  Fetches all fixture data for all available competitions for the given
+  season. If no season is provided, the current season will be used.
+
+  Doesn't add competition data - update-competition-data should be used
+  for that. Currently only fetches from Plan 1 competitions as defined
+  by the football-data API. See football-data.org/coverage for details
+  of those competitions. Also, not all seasons are available for all
+  competitions - the script will say when this is the case.
+
+=head1 OPTIONS
+
+=over
+
+=item -s/--season
+
+ The year of the season to process, in YYYY form. The starting year
+ of the season should be used i.e. 2020 would denote the 2020-2021
+ season.
+
+=back
+
+=cut
