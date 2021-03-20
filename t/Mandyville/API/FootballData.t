@@ -153,7 +153,8 @@ use Mandyville::API::FootballData;
         });
     });
 
-    throws_ok { $api->competition_season_matches(20, 400) } qr/Unknown error/,
+    throws_ok { $api->competition_season_matches(25, 400) } qr/Unknown error/,
+                'competition_season_matches: dies on unknown errorCode';
     
     $mock_ua->mock( 'get', sub {
         return _get_tx({
