@@ -191,7 +191,7 @@ sub get_by_football_data_id($self, $football_data_id) {
 
 sub get_by_plan($self, $plan) {
     my ($stmt, @bind) = $self->sqla->select(
-        -columns => [ qw(id football_data_id country_id) ],
+        -columns => [ qw(id name football_data_id country_id) ],
         -from    => 'competitions',
         -where   => {
             'football_data_plan' => $plan,
