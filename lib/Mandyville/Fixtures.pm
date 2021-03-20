@@ -226,8 +226,8 @@ sub process_fixture_data($self, $fixture_data) {
 
 sub _calculate_season($self, $season_info) {
     my $start = $season_info->{startDate};
-
-    return $start =~ /^\d{4}/;
+    my ($year) = $start =~ /^(\d{4})/;
+    return $year;
 }
 
 =back

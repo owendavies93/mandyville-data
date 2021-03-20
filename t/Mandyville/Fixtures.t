@@ -138,6 +138,9 @@ use Mandyville::Fixtures;
     cmp_ok( $data->{away_team_goals}, '==', 1,
             'process_fixture_data: correct match info' );
 
+    cmp_ok( $data->{season}, '==', '2017',
+            'process_fixture_data: correct season returned' );
+
     delete $fixture_info->{score}->{fullTime};
 
     throws_ok { $fixtures->process_fixture_data($fixture_info) }
