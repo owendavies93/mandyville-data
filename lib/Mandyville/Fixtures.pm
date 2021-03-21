@@ -37,6 +37,10 @@ use SQL::Abstract::More;
 
 =over
 
+=item comps
+
+  An instance of Mandyville::Competitions;
+
 =item dbh
 
   A read-write handle to the Mandyville database.
