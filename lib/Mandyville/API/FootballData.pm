@@ -90,6 +90,30 @@ sub competitions($self) {
     return $self->_get('competitions');
 }
 
+=item player ( ID )
+
+  Fetch the player data associated with C<ID>
+
+=cut
+
+sub player($self, $id) {
+    my $response = $self->_get("players/$id");
+
+    if (defined $response->{error}) {
+        if ($response->{error} == 404) {
+            croak "Not found: " . $response->{message};
+        }
+
+        die "Unknown error from API: $response->{message}";
+    } elsif (defined $response->{errorCode}) {
+        # We're not expecting 403s from this endpoint so always
+        # die with an unknown error
+        die "Unknown error from API: $response->{message}";
+    }
+
+    return $response;
+}
+
 =back
 
 =cut

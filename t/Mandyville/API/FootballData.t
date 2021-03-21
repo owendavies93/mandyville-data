@@ -169,6 +169,59 @@ use Mandyville::API::FootballData;
     ok( $data->{match}, 'competition_season_matches: data returned' );
 }
 
+######
+# TEST player
+######
+
+{
+    my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
+
+    my $message = 'Problem Problem!';
+    $mock_ua->mock( 'get', sub {
+        return _get_tx({
+            error   => 404,
+            message => $message,
+        });
+    });
+
+    my $api = Mandyville::API::FootballData->new;
+    $api->ua($mock_ua);
+
+    dies_ok { $api->player() } 'player: dies without args';
+
+    throws_ok { $api->player(10) } qr/Not found/, 'player: croaks on 404';
+
+    $mock_ua->mock( 'get', sub {
+        return _get_tx({
+            error   => 503,
+            message => $message,
+        });
+    });
+
+    throws_ok { $api->player(15) } qr/Unknown/, 'player: dies on unkown error';
+
+    $mock_ua->mock( 'get', sub {
+        return _get_tx({
+            errorCode => 404,
+            message   => $message,
+        });
+    });
+
+    throws_ok { $api->player(20) } qr/Unknown/, 'player: dies on unkown error';
+
+    $mock_ua->mock( 'get', sub {
+        return _get_tx({
+            id         => 44,
+            first_name => 'Owen',
+            last_name  => 'Davies',
+        });
+    });
+
+    my $data = $api->player(25);
+
+    ok( $data->{first_name}, 'player: data returned' );
+}
+
 sub _get_tx($body) {
     my $mock_tx = Test::MockObject::Extends->new( 'Mojo::Transaction::HTTP' );
 
