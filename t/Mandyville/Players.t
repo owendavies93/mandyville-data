@@ -180,6 +180,74 @@ use Mandyville::Players;
             'update_fixture_info: all player fixtures added' );
 }
 
+######
+# TEST _sanitise_name
+######
+
+{
+    my $players = Mandyville::Players->new({});
+
+    my $info = {
+        name        => 'Cristiano Ronaldo',
+        firstName   => 'Cristiano Ronaldo',
+        lastName    => undef,
+        nationality => 'Portugal',
+    };
+
+    $info = $players->_sanitise_name($info);
+
+    cmp_ok( $info->{firstName}, 'eq', 'Cristiano',
+            '_sanitise_name: correct first name' );
+
+    cmp_ok( $info->{lastName}, 'eq', 'Ronaldo',
+            '_sanitise_name: correct last name' );
+
+    $info = {
+        name        => 'Marcelo',
+        firstName   => 'Marcelo',
+        lastName    => undef,
+        nationality => 'Brazil',
+    };
+
+    $info = $players->_sanitise_name($info);
+
+    cmp_ok( $info->{firstName}, 'eq', 'Marcelo',
+            '_sanitise_name: correct first name' );
+
+    cmp_ok( $info->{lastName}, 'eq', '',
+            '_sanitise_name: correct last name' );
+
+    $info = {
+        name        => 'Marcelo',
+        firstName   => undef,
+        lastName    => 'Marcelo',
+        nationality => 'Brazil',
+    };
+
+    $info = $players->_sanitise_name($info);
+
+    cmp_ok( $info->{firstName}, 'eq', '',
+            '_sanitise_name: correct first name' );
+
+    cmp_ok( $info->{lastName}, 'eq', 'Marcelo',
+            '_sanitise_name: correct last name' );
+
+    $info = {
+        name        => 'Dani Carvajal',
+        firstName   => 'Dani',
+        lastName    => 'Carvajal',
+        nationality => 'Spain',
+    };
+
+    $info = $players->_sanitise_name($info);
+
+    cmp_ok( $info->{firstName}, 'eq', 'Dani',
+            '_sanitise_name: correct first name' );
+
+    cmp_ok( $info->{lastName}, 'eq', 'Carvajal',
+            '_sanitise_name: correct last name' );
+}
+
 done_testing();
 
 sub _mock_player_api($id) {

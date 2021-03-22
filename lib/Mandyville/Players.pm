@@ -326,7 +326,8 @@ sub _process_team_info($self, $fixture_id, $team_id, $fixture_data) {
 }
 
 sub _get_api_info_and_store($self, $player_id) {
-    my $player_info = $self->api->player($player_id);
+    my $player_info = $self->_sanitise_name($self->api->player($player_id));
+
     my $to_insert = {
         first_name   => $player_info->{firstName},
         last_name    => $player_info->{lastName},
@@ -335,6 +336,29 @@ sub _get_api_info_and_store($self, $player_id) {
     # TODO: Add insert only mode to save a query
     my $id = $self->get_or_insert($player_id, $to_insert);
     return $id;
+}
+
+sub _sanitise_name($self, $player_info) {
+    my $first = $player_info->{firstName};
+    my $last  = $player_info->{lastName};
+    my $full  = $player_info->{name};
+
+    return $player_info if defined $first && defined $last;
+
+    if ($full =~ /\s/) {
+        ($first, $last) = split /\s/, $full;
+    } elsif (!defined $last) {
+        $last = '';
+    } elsif (!defined $first) {
+        $first = '';
+    }
+
+    return {
+        firstName   => $first,
+        lastName    => $last,
+        name        => $full,
+        nationality => $player_info->{nationality},
+    };
 }
 
 sub _has_card($self, $player_id, $booking_info, $colour) {
