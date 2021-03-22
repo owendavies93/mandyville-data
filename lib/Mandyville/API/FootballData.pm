@@ -10,6 +10,7 @@ use File::Temp;
 use Mojo::File;
 use Mojo::JSON qw(decode_json);
 use Mojo::UserAgent;
+use Time::HiRes qw(time sleep);
 
 =head1 NAME
 
@@ -31,6 +32,7 @@ use Mojo::UserAgent;
 
 const my $BASE_URL    => "http://api.football-data.org/v2/";
 const my $EXPIRY_TIME => 60 / 24 / 60; # 60 minutes in days
+const my $MAX_REQS    => 10;
 
 has 'conf' => sub {
     my $config_hash = config();
@@ -39,8 +41,8 @@ has 'conf' => sub {
     return $config_hash;
 };
 
-has 'cache'  => sub { {} };
-has 'ua'     => sub { Mojo::UserAgent->new->connect_timeout(20) };
+has 'cache' => sub { {} };
+has 'ua'    => sub { Mojo::UserAgent->new->connect_timeout(20) };
 
 =head1 METHODS
 
@@ -127,6 +129,10 @@ sub _get($self, $path) {
         }
     }
 
+    # If we've made the maximum allowed requests in the last minute,
+    # limit ourselves for the minimum required time.
+    $self->_rate_limit;
+
     my $json = $self->ua->get(
         $BASE_URL . $path,
         { 'X-Auth-Token' => $self->conf->{football_data}->{api_token} }
@@ -136,6 +142,36 @@ sub _get($self, $path) {
     $self->cache->{$path} = $fh->filename;
     print $fh $json;
     return decode_json($json);
+}
+
+sub _rate_limit($self) {
+    if (!defined $self->{timings}) {
+        $self->{timings} = [ time ];
+        return 1;
+    }
+
+    if (scalar @{$self->{timings}} >= $MAX_REQS) {
+        my $now = time;
+        my $last_min = $now - 60;
+
+        # TODO: You could probably be cleverer about how long to sleep
+        # for, but this will do for now.
+        if ($self->{timings}->[0] >= $last_min) {
+            my $diff = 60 - ($now - $self->{timings}->[0]);
+            warn "hit rate limit: sleeping $diff";
+            sleep($diff);
+        }
+
+        while (scalar @{$self->{timings}} > 0 && $self->{timings}->[0] < $now) {
+            shift @{$self->{timings}};
+        }
+
+        push @{$self->{timings}}, $now;
+    } else {
+        push @{$self->{timings}}, time;
+    }
+
+    return scalar @{$self->{timings}};
 }
 
 1;

@@ -6,9 +6,11 @@ use Mojo::JSON qw(decode_json encode_json);
 use Mojo::Message::Response;
 use Overload::FileCheck qw(mock_file_check unmock_file_check);
 use Test::Exception;
-use Test::MockObject::Extends;
 use Test::MockModule;
+use Test::MockObject::Extends;
+use Test::MockSleep;
 use Test::More;
+use Test::Warn;
 
 ######
 # TEST includes/requires
@@ -72,6 +74,20 @@ use Mandyville::API::FootballData;
     cmp_ok( $call_count, '==', 3, '_get: UA called after cache expiry' );
 
     unmock_file_check('-M');
+
+    # Test rate limiting
+    # turn off caching to do this
+
+    mock_file_check( '-f' => sub { 0 } );
+
+    warning_like {
+        for (1..8) { $api->_get($path) };
+    } qr/hit rate limit: sleeping/, '_get: correct rate limit warning';
+
+    cmp_ok( slept(), '>', 59,
+            '_get: rate limiting caused sleep for over 59 seconds' );
+
+    unmock_file_check('-f');
 }
 
 ######
@@ -94,7 +110,7 @@ use Mandyville::API::FootballData;
     my $api = Mandyville::API::FootballData->new;
     $api->ua($mock_ua);
     my $response = $api->competitions;
-    
+
     cmp_ok( $response->{count}, '==', 1, 'competitions: correct count' );
 
     my $name = $response->{competitions}->[0]->{name};
@@ -155,7 +171,7 @@ use Mandyville::API::FootballData;
 
     throws_ok { $api->competition_season_matches(25, 400) } qr/Unknown error/,
                 'competition_season_matches: dies on unknown errorCode';
-    
+
     $mock_ua->mock( 'get', sub {
         return _get_tx({
             match => {
@@ -232,7 +248,7 @@ sub _get_tx($body) {
         $res->parse(encode_json($body));
         return $res;
     });
-    
+
     return $mock_tx;
 }
 

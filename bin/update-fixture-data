@@ -96,9 +96,6 @@ foreach my $comp (@$valid_comps) {
             die "$_";
         }
     };
-
-    # Cope with football-data API rate limiting;
-    sleep(6);
 }
 
 =head1 NAME
