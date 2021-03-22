@@ -32,7 +32,7 @@ use Time::HiRes qw(time sleep);
 
 const my $BASE_URL    => "http://api.football-data.org/v2/";
 const my $EXPIRY_TIME => 60 / 24 / 60; # 60 minutes in days
-const my $MAX_REQS    => 10;
+const my $MAX_REQS    => 30;
 
 has 'conf' => sub {
     my $config_hash = config();

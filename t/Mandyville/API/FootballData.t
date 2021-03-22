@@ -81,7 +81,7 @@ use Mandyville::API::FootballData;
     mock_file_check( '-f' => sub { 0 } );
 
     warning_like {
-        for (1..8) { $api->_get($path) };
+        for (1..28) { $api->_get($path) };
     } qr/hit rate limit: sleeping/, '_get: correct rate limit warning';
 
     cmp_ok( slept(), '>', 59,
