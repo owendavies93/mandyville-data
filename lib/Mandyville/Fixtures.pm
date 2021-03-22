@@ -167,7 +167,7 @@ sub get_or_insert($self, $comp_id, $home_id, $away_id, $season, $match_info) {
 
 =item process_fixture_data ( FIXTURE_DATA )
 
-  Process the data for a fixture (called a 'match' in the footbal-data
+  Process the data for a fixture (called a 'match' in the football-data
   API), inserting the teams and fixture data where necessary. Doesn't
   insert any competition data.The C<FIXTURE_DATA> paramater should be
   a hashref in the same format as the JSON shown in
