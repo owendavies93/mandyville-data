@@ -254,16 +254,15 @@ sub update_fixture_info($self, $fixture_data) {
     my $fixture_id   = $fixture_info->{id};
 
     my $home_id = $fixture_info->{home_team_id};
-    $self->_process_team_info($fixture_id, $home_id, $fixture_data);
+    $self->_process_team_info(
+        $fixture_id, $home_id, $fixture_data, $fixture_data->{homeTeam});
 
     my $away_id = $fixture_info->{away_team_id};
-    return $self->_process_team_info($fixture_id, $away_id, $fixture_data);
+    return $self->_process_team_info(
+        $fixture_id, $away_id, $fixture_data, $fixture_data->{awayTeam});
 }
 
-sub _process_team_info($self, $fixture_id, $team_id, $fixture_data) {
-    my $team_info = $fixture_data->{homeTeam}->{id} == $team_id ?
-                    $fixture_data->{homeTeam} : $fixture_data->{awayTeam};
-
+sub _process_team_info($self, $fixture_id, $team_id, $fixture_data, $team_info) {
     my $starters = $team_info->{lineup};
     my $subs     = $team_info->{bench};
 
