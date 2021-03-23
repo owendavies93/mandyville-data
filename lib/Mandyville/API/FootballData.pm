@@ -61,7 +61,6 @@ has 'ua'    => sub { Mojo::UserAgent->new->connect_timeout(20) };
 
 =cut
 
-# TODO: deal with error states when season is out of range
 sub competition_season_matches($self, $id, $season) {
     my $response = $self->_get("competitions/$id/matches?season=$season");
 
