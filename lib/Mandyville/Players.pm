@@ -372,12 +372,29 @@ sub _has_card($self, $player_id, $booking_info, $colour) {
 }
 
 sub _insert_player_fixture($self, $info) {
-    my ($stmt, @bind) = $self->sqla->insert(
-        -into   => 'players_fixtures',
-        -values => $info,
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'id',
+        -from    => 'players_fixtures',
+        -where   => {
+           player_id  => $info->{player_id},
+           fixture_id => $info->{fixture_id},
+           team_id    => $info->{team_id},
+        },
     );
 
-    return $self->dbh->do($stmt, undef, @bind);
+    my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    if (!defined $id) {
+        my ($stmt, @bind) = $self->sqla->insert(
+            -into      => 'players_fixtures',
+            -values    => $info,
+            -returning => 'id'
+        );
+
+        ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    }
+
+    return $id;
 }
 
 =back
