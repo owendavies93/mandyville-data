@@ -206,7 +206,13 @@ sub get_or_insert($self, $football_data_id, $player_info) {
         my $country_id =
             $self->countries->get_country_id($player_info->{country_name});
 
-        die 'No country with name' . $player_info->{country_name} . 'found'
+        if (!defined $country_id) {
+            $country_id = $self->countries->get_id_for_alternate_name(
+                $player_info->{country_name}
+            );
+        }
+
+        die 'No country with name ' . $player_info->{country_name} . ' found'
             unless defined $country_id;
 
         ($stmt, @bind) = $self->sqla->insert(

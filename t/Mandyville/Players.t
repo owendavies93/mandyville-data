@@ -65,6 +65,15 @@ use Mandyville::Players;
 
     cmp_ok( $data->{id}, '==', $fetched_data->{id},
             'get_or_insert: correctly fetches player from db' );
+
+    $player_info = {
+        first_name   => 'Moeen',
+        last_name    => 'Ali',
+        country_name => 'United States',
+    };
+
+    ok( $players->get_or_insert(11, $player_info),
+        'get_or_insert: data inserted with alternate country' );
 }
 
 ######
