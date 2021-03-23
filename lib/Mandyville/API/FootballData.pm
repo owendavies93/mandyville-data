@@ -161,15 +161,16 @@ sub _rate_limit($self) {
         my $now = time;
         my $last_min = $now - 60;
 
-        # TODO: You could probably be cleverer about how long to sleep
-        # for, but this will do for now.
         if ($self->{timings}->[0] >= $last_min) {
             my $diff = 60 - ($now - $self->{timings}->[0]);
-            warn "hit rate limit: sleeping $diff";
+            warn "hit rate limit: sleeping $diff\n";
             sleep($diff);
+            $now = time;
+            $last_min = $now - 60;
         }
 
-        while (scalar @{$self->{timings}} > 0 && $self->{timings}->[0] < $now) {
+        while (scalar @{$self->{timings}} > 0 &&
+               $self->{timings}->[0] < $last_min) {
             shift @{$self->{timings}};
         }
 
