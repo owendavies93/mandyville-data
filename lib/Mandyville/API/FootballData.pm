@@ -98,7 +98,8 @@ sub competitions($self) {
 =cut
 
 sub player($self, $id) {
-    my $response = $self->_get("players/$id");
+    my $path = "players/$id";
+    my $response = $self->_get($path);
 
     if (defined $response->{error}) {
         if ($response->{error} == 404) {
@@ -107,9 +108,16 @@ sub player($self, $id) {
 
         die "Unknown error from API: $response->{message}";
     } elsif (defined $response->{errorCode}) {
-        # We're not expecting 403s from this endpoint so always
-        # die with an unknown error
-        die "Unknown error from API: $response->{message}";
+        if ($response->{errorCode} == 429) {
+            my ($time) = $response->{message} =~ /(\d+)/;
+            warn "hit rate limit from API: sleeping $time\n";
+            sleep($time);
+
+            delete $self->cache->{$path};
+            $response = $self->_get($path);
+        } else {
+            die "Unknown error from API: $response->{message}";
+        }
     }
 
     return $response;

@@ -227,13 +227,25 @@ use Mandyville::API::FootballData;
 
     $mock_ua->mock( 'get', sub {
         return _get_tx({
+            errorCode => 429,
+            message   => 'You reached your request limit. Wait 60 seconds.',
+        });
+    });
+
+    warning_is { $api->player(25) } "hit rate limit from API: sleeping 60\n",
+                 'player: correctly warns on 429 error';
+
+    cmp_ok( slept(), '==', 60, 'player: slept for correct time' );
+
+    $mock_ua->mock( 'get', sub {
+        return _get_tx({
             id         => 44,
             first_name => 'Owen',
             last_name  => 'Davies',
         });
     });
 
-    my $data = $api->player(25);
+    my $data = $api->player(30);
 
     ok( $data->{first_name}, 'player: data returned' );
 }
