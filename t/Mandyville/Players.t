@@ -12,6 +12,7 @@ use Mandyville::Utils qw(find_file);
 
 use Mojo::File;
 use Mojo::JSON qw(decode_json);
+use Mojo::Util qw(encode decode);
 use SQL::Abstract::More;
 use Test::Exception;
 use Test::MockObject::Extends;
@@ -74,6 +75,24 @@ use Mandyville::Players;
 
     ok( $players->get_or_insert(11, $player_info),
         'get_or_insert: data inserted with alternate country' );
+
+    my $from_json = _load_test_json('player.json');
+
+    my $mock_api = Test::MockObject::Extends->new(
+        'Mandyville::API::FootballData'
+    );
+
+    $mock_api->mock( 'player', sub { $from_json } );
+
+    $players = Mandyville::Players->new({
+        api       => $mock_api,
+        countries => $countries,
+        dbh       => $dbh->rw_db_handle(),
+        sqla      => $sqla,
+    });
+
+    ok( $data = $players->_get_api_info_and_store(56100),
+        '_get_api_info_and_store: correctly deals with UTF-8 player data' );
 }
 
 ######
