@@ -1,0 +1,1 @@
+0 1 1 * * /usr/bin/update-competition-data | ts '[%Y-%m-%d %H:%M:%S]' > /var/log/mandyville/update-competition-data.log 2>&1

@@ -7,14 +7,15 @@ License:    MIT
 URL:        https://github.com/sirgraystar/mandyville-data
 Source0:    %{name}-%{version}-%{release}.tar.gz
 
-Requires:    perl(Capture::Tiny)
-Requires:    perl(Const::Fast)
-Requires:    perl(Dir::Self)
-Requires:    perl(DBD::Pg)
-Requires:    perl(DBI)
-Requires:    perl(File::Temp)
-Requires:    perl(SQL::Abstract::More)
-Requires:    perl(YAML::XS)
+Requires:   moreutils
+Requires:   perl(Capture::Tiny)
+Requires:   perl(Const::Fast)
+Requires:   perl(Dir::Self)
+Requires:   perl(DBD::Pg)
+Requires:   perl(DBI)
+Requires:   perl(File::Temp)
+Requires:   perl(SQL::Abstract::More)
+Requires:   perl(YAML::XS)
 
 %description
 Data fetching and data storage for mandyville.
@@ -30,6 +31,8 @@ install -Dm755 bin/* %{buildroot}%{_bindir}/
 # Config
 install -dm755 %{buildroot}%{_sysconfdir}/mandyville/
 install -Dm644 etc/mandyville/* %{buildroot}%{_sysconfdir}/mandyville/
+install -dm755 %{buildroot}%{_sysconfdir}/cron.d/
+install -Dm644 etc/cron.d/* %{buildroot}%{_sysconfdir}/cron.d/
 
 # Libraries
 install -dm755 %{buildroot}%{perl_vendorlib}/Mandyville/
@@ -40,6 +43,11 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 
 # Binaries
 %{_bindir}/update-competition-data
+%{_bindir}/update-fixture-data
+
+# Crons
+%{_sysconfdir}/cron.d/update-competition-data
+%{_sysconfdir}/cron.d/update-fixture-data
 
 # Libraries
 %{perl_vendorlib}/Mandyville/*.pm
