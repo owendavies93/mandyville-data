@@ -268,6 +268,7 @@ sub _mock_player_api($id) {
         };
     } elsif ($id == 50) {
         return {
+            name        => 'Nacho',
             firstName   => 'Nacho',
             lastName    => undef,
             nationality => 'Spain',
