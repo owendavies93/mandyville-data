@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.1
-Release:    1%{?dist}
+Release:    2%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -42,6 +42,7 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 %defattr(-,root,root,-)
 
 # Binaries
+%{_bindir}/send-healthcheck
 %{_bindir}/update-competition-data
 %{_bindir}/update-fixture-data
 
@@ -60,5 +61,8 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Thu Mar 25 2021 Owen Davies <owen@odavi.es> - 0.0.1-2
+- Add health checking for crons
+
 * Sat Mar 13 2021 Owen Davies <owen@odavi.es> - 0.0.1-1
 - Initial package
