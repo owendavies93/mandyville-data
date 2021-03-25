@@ -5,8 +5,10 @@ use Mojo::Base -base, -signatures;
 use Carp;
 use Const::Fast;
 use Mojo::File;
-use Mojo::JSON qw(decode_json);
+use Mojo::JSON qw(decode_json encode_json);
+use Mojo::Message::Response;
 use Mojo::UserAgent;
+use Test::MockObject::Extends;
 
 =head1 NAME
 
@@ -74,6 +76,20 @@ sub get($self, $path) {
 
 sub _get($self, $path) {
     croak "_get() is not implemented in superclass!";
+}
+
+sub _get_tx($self, $body) {
+    my $mock_tx = Test::MockObject::Extends->new( 'Mojo::Transaction::HTTP' );
+
+    $mock_tx->mock( 'res', sub {
+        my $res = Mojo::Message::Response->new;
+        $res->parse("HTTP/1.0 200 OK\x0d\x0a");
+        $res->parse("Content-Type: text/plain\x0d\x0a\x0d\x0a");
+        $res->parse(encode_json($body));
+        return $res;
+    });
+
+    return $mock_tx;
 }
 
 sub _rate_limit($self) {

@@ -2,8 +2,7 @@
 
 use Mojo::Base -strict, -signatures;
 
-use Mojo::JSON qw(decode_json encode_json);
-use Mojo::Message::Response;
+use Mojo::JSON qw(decode_json);
 use Overload::FileCheck qw(mock_file_check unmock_file_check);
 use Test::Exception;
 use Test::MockModule;
@@ -42,15 +41,14 @@ use Mandyville::API::FootballData;
 {
     my $path = 'test';
     my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
-
     my $call_count = 0;
+    my $api = Mandyville::API::FootballData->new;
 
     $mock_ua->mock( 'get', sub {
         $call_count++;
-        return _get_tx({ called => 1 })
+        return $api->_get_tx({ called => 1 })
     });
 
-    my $api = Mandyville::API::FootballData->new;
     $api->ua($mock_ua);
     my $response = $api->get($path);
 
@@ -96,9 +94,10 @@ use Mandyville::API::FootballData;
 
 {
     my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
+    my $api = Mandyville::API::FootballData->new;
 
     $mock_ua->mock( 'get', sub {
-        return _get_tx({
+        return $api->_get_tx({
             count => 1,
             competitions => [{
                 id   => 1,
@@ -107,7 +106,6 @@ use Mandyville::API::FootballData;
         })
     });
 
-    my $api = Mandyville::API::FootballData->new;
     $api->ua($mock_ua);
     my $response = $api->competitions;
 
@@ -124,16 +122,15 @@ use Mandyville::API::FootballData;
 
 {
     my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
-
     my $message = 'Problem Problem!';
+    my $api = Mandyville::API::FootballData->new;
+
     $mock_ua->mock( 'get', sub {
-        return _get_tx({
+        return $api->_get_tx({
             error   => 404,
             message => $message,
         });
     });
-
-    my $api = Mandyville::API::FootballData->new;
     $api->ua($mock_ua);
 
     dies_ok { $api->competition_season_matches() }
@@ -143,7 +140,7 @@ use Mandyville::API::FootballData;
                 'competition_season_matches: croaks on 404';
 
     $mock_ua->mock( 'get', sub {
-        return _get_tx({
+        return $api->_get_tx({
             errorCode => 403,
             message   => $message,
         });
@@ -153,7 +150,7 @@ use Mandyville::API::FootballData;
                 'competition_season_matches: croaks on 403';
 
     $mock_ua->mock( 'get', sub {
-        return _get_tx({
+        return $api->_get_tx({
             error   => 503,
             message => $message,
         });
@@ -163,7 +160,7 @@ use Mandyville::API::FootballData;
                 'competition_season_matches: dies on unknown error';
 
     $mock_ua->mock( 'get', sub {
-        return _get_tx({
+        return $api->_get_tx({
             errorCode => 503,
             message   => $message,
         });
@@ -173,7 +170,7 @@ use Mandyville::API::FootballData;
                 'competition_season_matches: dies on unknown errorCode';
 
     $mock_ua->mock( 'get', sub {
-        return _get_tx({
+        return $api->_get_tx({
             match => {
                 id => 1,
             }
@@ -191,16 +188,15 @@ use Mandyville::API::FootballData;
 
 {
     my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
-
     my $message = 'Problem Problem!';
+    my $api = Mandyville::API::FootballData->new;
+
     $mock_ua->mock( 'get', sub {
-        return _get_tx({
+        return $api->_get_tx({
             error   => 404,
             message => $message,
         });
     });
-
-    my $api = Mandyville::API::FootballData->new;
     $api->ua($mock_ua);
 
     dies_ok { $api->player() } 'player: dies without args';
@@ -208,7 +204,7 @@ use Mandyville::API::FootballData;
     throws_ok { $api->player(10) } qr/Not found/, 'player: croaks on 404';
 
     $mock_ua->mock( 'get', sub {
-        return _get_tx({
+        return $api->_get_tx({
             error   => 503,
             message => $message,
         });
@@ -217,7 +213,7 @@ use Mandyville::API::FootballData;
     throws_ok { $api->player(15) } qr/Unknown/, 'player: dies on unkown error';
 
     $mock_ua->mock( 'get', sub {
-        return _get_tx({
+        return $api->_get_tx({
             errorCode => 404,
             message   => $message,
         });
@@ -226,7 +222,7 @@ use Mandyville::API::FootballData;
     throws_ok { $api->player(20) } qr/Unknown/, 'player: dies on unkown error';
 
     $mock_ua->mock( 'get', sub {
-        return _get_tx({
+        return $api->_get_tx({
             errorCode => 429,
             message   => 'You reached your request limit. Wait 60 seconds.',
         });
@@ -238,7 +234,7 @@ use Mandyville::API::FootballData;
     cmp_ok( slept(), '==', 60, 'player: slept for correct time' );
 
     $mock_ua->mock( 'get', sub {
-        return _get_tx({
+        return $api->_get_tx({
             id         => 44,
             first_name => 'Owen',
             last_name  => 'Davies',
@@ -248,20 +244,6 @@ use Mandyville::API::FootballData;
     my $data = $api->player(30);
 
     ok( $data->{first_name}, 'player: data returned' );
-}
-
-sub _get_tx($body) {
-    my $mock_tx = Test::MockObject::Extends->new( 'Mojo::Transaction::HTTP' );
-
-    $mock_tx->mock( 'res', sub {
-        my $res = Mojo::Message::Response->new;
-        $res->parse("HTTP/1.0 200 OK\x0d\x0a");
-        $res->parse("Content-Type: text/plain\x0d\x0a\x0d\x0a");
-        $res->parse(encode_json($body));
-        return $res;
-    });
-
-    return $mock_tx;
 }
 
 done_testing;
