@@ -1,15 +1,11 @@
 package Mandyville::API::FootballData;
 
-use Mojo::Base -base, -signatures;
+use Mojo::Base 'Mandyville::API', -signatures;
 
 use Mandyville::Config qw(config);
 
 use Carp;
 use Const::Fast;
-use File::Temp;
-use Mojo::File;
-use Mojo::JSON qw(decode_json);
-use Mojo::UserAgent;
 use Time::HiRes qw(time sleep);
 
 =head1 NAME
@@ -31,7 +27,6 @@ use Time::HiRes qw(time sleep);
 =cut
 
 const my $BASE_URL    => "http://api.football-data.org/v2/";
-const my $EXPIRY_TIME => 60 / 24 / 60; # 60 minutes in days
 const my $MAX_REQS    => 30;
 
 has 'conf' => sub {
@@ -40,9 +35,6 @@ has 'conf' => sub {
         unless defined $config_hash->{football_data}->{api_token};
     return $config_hash;
 };
-
-has 'cache' => sub { {} };
-has 'ua'    => sub { Mojo::UserAgent->new->connect_timeout(20) };
 
 =head1 METHODS
 
@@ -62,7 +54,7 @@ has 'ua'    => sub { Mojo::UserAgent->new->connect_timeout(20) };
 =cut
 
 sub competition_season_matches($self, $id, $season) {
-    my $response = $self->_get("competitions/$id/matches?season=$season");
+    my $response = $self->get("competitions/$id/matches?season=$season");
 
     if (defined $response->{error}) {
         if ($response->{error} == 404) {
@@ -88,7 +80,7 @@ sub competition_season_matches($self, $id, $season) {
 =cut
 
 sub competitions($self) {
-    return $self->_get('competitions');
+    return $self->get('competitions');
 }
 
 =item player ( ID )
@@ -99,7 +91,7 @@ sub competitions($self) {
 
 sub player($self, $id) {
     my $path = "players/$id";
-    my $response = $self->_get($path);
+    my $response = $self->get($path);
 
     if (defined $response->{error}) {
         if ($response->{error} == 404) {
@@ -128,27 +120,10 @@ sub player($self, $id) {
 =cut
 
 sub _get($self, $path) {
-    if (defined $self->cache->{$path}) {
-        my $cache_path = $self->cache->{$path};
-        if (-f $cache_path && -M $cache_path <= $EXPIRY_TIME) {
-            my $json = Mojo::File->new($cache_path)->slurp;
-            return decode_json($json);
-        }
-    }
-
-    # If we've made the maximum allowed requests in the last minute,
-    # limit ourselves for the minimum required time.
-    $self->_rate_limit;
-
-    my $json = $self->ua->get(
+    return $self->ua->get(
         $BASE_URL . $path,
         { 'X-Auth-Token' => $self->conf->{football_data}->{api_token} }
     )->res->body;
-
-    my $fh = File::Temp->new( UNLINK => 0, SUFFIX => '.json' );
-    $self->cache->{$path} = $fh->filename;
-    print $fh $json;
-    return decode_json($json);
 }
 
 sub _rate_limit($self) {

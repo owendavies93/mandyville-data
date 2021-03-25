@@ -52,24 +52,24 @@ use Mandyville::API::FootballData;
 
     my $api = Mandyville::API::FootballData->new;
     $api->ua($mock_ua);
-    my $response = $api->_get($path);
+    my $response = $api->get($path);
 
     cmp_ok( $response->{called}, '==', 1, '_get: response matches' );
 
     cmp_ok( $call_count, '==', 1, '_get: mocked UA was correctly called' );
 
-    $api->_get($path);
+    $api->get($path);
 
     cmp_ok( $call_count, '==', 1, '_get: UA not called for same path' );
 
     unlink $api->cache->{$path};
-    $api->_get($path);
+    $api->get($path);
 
     cmp_ok( $call_count, '==', 2, '_get: UA called if cache not found' );
 
     mock_file_check( '-M' => sub { 61 / 24 / 60 } );
 
-    $api->_get($path);
+    $api->get($path);
 
     cmp_ok( $call_count, '==', 3, '_get: UA called after cache expiry' );
 
@@ -81,7 +81,7 @@ use Mandyville::API::FootballData;
     mock_file_check( '-f' => sub { 0 } );
 
     warning_like {
-        for (1..28) { $api->_get($path) };
+        for (1..28) { $api->get($path) };
     } qr/hit rate limit: sleeping/, '_get: correct rate limit warning';
 
     cmp_ok( slept(), '>', 59,
