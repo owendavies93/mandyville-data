@@ -13,3 +13,6 @@ database:
 football_data:
   api_token: 'changeme'
 
+healthcheck:
+  update-competiton-data: 'changeme'
+  update-fixture-data: 'changeme'

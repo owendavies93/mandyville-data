@@ -1,0 +1,51 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict;
+
+use Mandyville::Config qw(config);
+use Mojo::UserAgent;
+
+use Const::Fast;
+use Getopt::Long;
+use Pod::Usage;
+
+const my $BASE_URL => 'https://hc-ping.com/';
+
+my $ua = Mojo::UserAgent->new->connect_timeout(20);
+my $config = config();
+
+my $name;
+GetOptions(
+    "name=s" => \$name,
+);
+
+pod2usage("send-healthcheck: --name required") unless defined $name;
+
+my $ping_path = $config->{healthcheck}->{$name};
+
+die "Can't find ping path for $name" unless defined $ping_path;
+
+$ua->get($BASE_URL . $ping_path);
+
+=head1 NAME
+
+  send-healthcheck [ --name NAME ]
+
+=head1 DESCRIPTION
+
+  Sends a healthchecks.io ping for the given script name. Details of
+  the ping URL to send should be provided in the config file.
+
+=head1 OPTIONS
+
+=over
+
+=item --name
+
+  The name of the script to send a health check for. The script dies
+  if this isn't provided.
+
+=back
+
+=cut
+
