@@ -29,6 +29,8 @@ const my $PARSERS  => {
 
 =head1 METHODS
 
+=over
+
 =item search ( NAME )
 
   Searches for a player with the given C<NAME>. Name should be the
