@@ -10,6 +10,7 @@ Source0:    %{name}-%{version}-%{release}.tar.gz
 Requires:   moreutils
 Requires:   perl(Capture::Tiny)
 Requires:   perl(Const::Fast)
+Requires:   perl(Cpanel::JSON::XS)
 Requires:   perl(Dir::Self)
 Requires:   perl(DBD::Pg)
 Requires:   perl(DBI)

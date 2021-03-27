@@ -4,6 +4,7 @@ requires 'Mojo::Base';
 # libs
 requires 'Capture::Tiny';
 requires 'Const::Fast';
+requires 'Cpanel::JSON::XS';
 requires 'Dir::Self';
 requires 'DBD::Pg';
 requires 'DBI';
