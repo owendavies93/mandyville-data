@@ -8,7 +8,6 @@ use Mojo::File;
 use Mojo::JSON qw(decode_json encode_json);
 use Mojo::Message::Response;
 use Mojo::UserAgent;
-use Test::MockObject::Extends;
 
 =head1 NAME
 
@@ -78,7 +77,10 @@ sub _get($self, $path) {
     croak "_get() is not implemented in superclass!";
 }
 
+# TODO: This would be neater in some sort of test related module
+#       to avoid having the inline require statement.
 sub _get_tx($self, $body) {
+    require Test::MockObject::Extends;
     my $mock_tx = Test::MockObject::Extends->new( 'Mojo::Transaction::HTTP' );
 
     $mock_tx->mock( 'res', sub {
