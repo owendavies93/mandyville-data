@@ -2,8 +2,12 @@ package Mandyville::Players;
 
 use Mojo::Base -base, -signatures;
 
+use Mandyville::API::Understat;
+use Mandyville::API::FootballData;
+use Mandyville::Competitions;
 use Mandyville::Countries;
 use Mandyville::Database;
+use Mandyville::Fixtures;
 
 use Carp;
 use SQL::Abstract::More;
@@ -33,7 +37,8 @@ use SQL::Abstract::More;
   });
 
   my $players = Mandyville::Players->new({
-      api       => Mandyville::API::FootballData->new,
+      fapi      => Mandyville::API::FootballData->new,
+      uapi      => Mandyville::API::Understat->new,
       comps     => $comps,
       countries => Mandyville::Countries->new,
       fixtures  => $fixtures,
@@ -52,9 +57,13 @@ use SQL::Abstract::More;
 
 =over
 
-=item api
+=item fapi
 
   An instance of Mandyville::API::FootballData
+
+=item uapi
+
+  An instance of Mandyville::API::Understat
 
 =item comps
 
@@ -82,7 +91,8 @@ use SQL::Abstract::More;
 
 =cut
 
-has 'api'       => sub { shift->{api} };
+has 'fapi'      => sub { shift->{fapi} };
+has 'uapi'      => sub { shift->{uapi} };
 has 'comps'     => sub { shift->{comps} };
 has 'countries' => sub { shift->{countries} };
 has 'dbh'       => sub { shift->{dbh} };
@@ -106,7 +116,8 @@ has 'teams'     => sub { shift->{teams} };
 =cut
 
 sub new($class, $options) {
-    $options->{api}  //= Mandyville::API::FootballData->new;
+    $options->{fapi} //= Mandyville::API::FootballData->new;
+    $options->{uapi} //= Mandyville::API::Understat->new;
     $options->{dbh}  //= Mandyville::Database->new->rw_db_handle();
     $options->{sqla} //= SQL::Abstract::More->new;
 
@@ -116,7 +127,7 @@ sub new($class, $options) {
     });
 
     $options->{comps} //= Mandyville::Competitions->new({
-        api       => $options->{api},
+        fapi      => $options->{fapi},
         countries => $options->{countries},
         dbh       => $options->{dbh},
         sqla      => $options->{sqla},
@@ -135,7 +146,8 @@ sub new($class, $options) {
     });
 
     my $self = {
-        api       => $options->{api},
+        fapi      => $options->{fapi},
+        uapi      => $options->{uapi},
         comps     => $options->{comps},
         countries => $options->{countries},
         dbh       => $options->{dbh},
@@ -146,6 +158,47 @@ sub new($class, $options) {
 
     bless $self, $class;
     return $self;
+}
+
+=item find_understat_id ( ID )
+
+  Attempt to find the understat ID for the player with the given
+  C<ID>. C<ID> refers to the mandyville database ID in this case. Runs
+  through the following steps to attempt to do this:
+
+  * Work out the most recent team for the player
+  * Search understat for the player's full name
+  * If there's a result with the correct team, use that ID
+  * If not, search for the player's last name
+  * If still not, search for the player's first name
+
+  Note that understat team names won't always match mandyville database
+  team names, and are usually shorter, so do a substring check when
+  comparing team names.
+
+  Inserts the understat ID into the database if one is found. Dies if
+  no ID is found (since we want to alert and fix in that case).
+
+=cut
+
+sub find_understat_id($self, $id) {
+    my $most_recent_team = $self->_get_most_recent_team($id);
+
+    my ($first, $last) = $self->_get_name($id);
+
+    my $full = "$first $last";
+
+    my @options = ($full, $last, $first);
+
+    foreach my $string (@options) {
+        my $res = $self->_search_understat_and_store(
+            $string, $id, $most_recent_team
+        );
+
+        return $res if defined $res;
+    }
+
+    die "Couldn't find understat ID for player #$id";
 }
 
 =item get_by_football_data_id ( FOOTBALL_DATA_ID )
@@ -331,7 +384,7 @@ sub _process_team_info($self, $fixture_id, $team_id, $fixture_data, $team_info) 
 }
 
 sub _get_api_info_and_store($self, $player_id) {
-    my $player_info = $self->_sanitise_name($self->api->player($player_id));
+    my $player_info = $self->_sanitise_name($self->fapi->player($player_id));
 
     my $to_insert = {
         first_name   => $player_info->{firstName},
@@ -341,6 +394,36 @@ sub _get_api_info_and_store($self, $player_id) {
     # TODO: Add insert only mode to save a query
     my $id = $self->get_or_insert($player_id, $to_insert);
     return $id;
+}
+
+sub _get_most_recent_team($self, $id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns  => 't.name',
+        -from     => [ -join => qw(
+            players_fixtures|pf <=>{f.id=pf.fixture_id} fixtures|f
+                                <=>{pf.team_id=t.id}    teams|t
+        )],
+        -where    => {
+            player_id => $id,
+        },
+        -order_by => [qw(-season -fixture_id)],
+    );
+
+    my ($name) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    return $name;
+}
+
+sub _get_name($self, $id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => [ qw(first_name last_name) ],
+        -from    => 'players',
+        -where   => {
+            'id' => $id,
+        }
+    );
+
+    my ($first, $last) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    return ($first, $last);
 }
 
 sub _sanitise_name($self, $player_info) {
@@ -395,6 +478,32 @@ sub _insert_player_fixture($self, $info) {
     }
 
     return $id;
+}
+
+sub _search_understat_and_store($self, $string, $id, $team) {
+    my $results = $self->uapi->search($string);
+
+    return if scalar @$results == 0;
+
+    foreach my $player (@$results) {
+        if ($team =~ /\Q$player->{team}\E/) {
+            my ($stmt, @bind) = $self->sqla->update(
+                -table => 'players',
+                -set   => {
+                    understat_id => $player->{id},
+                },
+                -where => {
+                    id => $id,
+                }
+            );
+
+            $self->dbh->do($stmt, undef, @bind);
+
+            return $player;
+        }
+    }
+
+    return;
 }
 
 =back

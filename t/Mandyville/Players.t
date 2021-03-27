@@ -85,7 +85,7 @@ use Mandyville::Players;
     $mock_api->mock( 'player', sub { $from_json } );
 
     $players = Mandyville::Players->new({
-        api       => $mock_api,
+        fapi      => $mock_api,
         countries => $countries,
         dbh       => $dbh->rw_db_handle(),
         sqla      => $sqla,
@@ -108,7 +108,7 @@ use Mandyville::Players;
     });
 
     my $players = Mandyville::Players->new({
-        api       => Mandyville::API::FootballData->new,
+        fapi      => Mandyville::API::FootballData->new,
         countries => $countries,
         dbh       => $dbh->rw_db_handle(),
         sqla      => $sqla,
@@ -137,7 +137,7 @@ use Mandyville::Players;
 }
 
 ######
-# TEST update_fixture_info
+# TEST update_fixture_info and find_understat_id
 ######
 
 {
@@ -173,11 +173,11 @@ use Mandyville::Players;
 
     $mock_api->mock( 'player', sub {
         my ($self, $id) = @_;
-        _mock_player_api($id)
+        _mock_player_api($id);
     } );
 
     my $players = Mandyville::Players->new({
-        api       => $mock_api,
+        fapi      => $mock_api,
         comps     => $comps,
         countries => $countries,
         fixtures  => $fixtures,
@@ -206,6 +206,44 @@ use Mandyville::Players;
     # Match the number of players in the test JSON
     cmp_ok( $count, '==', 4,
             'update_fixture_info: all player fixtures added' );
+
+    # Test find_understat_id using the boilerplate from the existing
+    # test
+    my $mock_understat = Test::MockObject::Extends->new(
+        'Mandyville::API::Understat'
+    );
+
+    my $name = 'Dani Carvajal';
+    my $last = 'Carvajal';
+    my $football_data_id = 3194;
+    my $mandyville_id = $players->get_by_football_data_id($football_data_id);
+
+    $mock_understat->mock( 'search', sub {
+        my ($self, $name) = @_;
+        _mock_search_api($name);
+    } );
+
+    $players->uapi($mock_understat);
+
+    my $result = $players->find_understat_id($mandyville_id);
+
+    ok( $result->{id}, 'find_understat_id: ID is returned' );
+    cmp_ok( $result->{player}, 'ne', $name,
+            'find_understat_id: matched on non-identical name' );
+
+    my ($fetched_last) = $result->{player} =~ / (\w+)$/;
+
+    cmp_ok( $fetched_last, 'eq', $last,
+            'find_understat_id: last names match on non-identical name' );
+
+    # Change to a valid football data ID from the current test data, but one
+    # that the mock API doesn't know about
+    $football_data_id = 50;
+    $mandyville_id = $players->get_by_football_data_id($football_data_id);
+
+    throws_ok { $players->find_understat_id($mandyville_id) }
+                qr/Couldn't find understat ID/,
+                'find_understat_id: dies on unknown player';
 }
 
 ######
@@ -306,6 +344,20 @@ sub _mock_player_api($id) {
         };
     } else {
         die "Unknown player ID $id";
+    }
+}
+
+sub _mock_search_api($name) {
+    if ($name eq 'Dani Carvajal') {
+        return [];
+    } elsif ($name eq 'Carvajal') {
+        return [{
+            id     => '2260',
+            player => 'Daniel Carvajal',
+            team   => 'Real Madrid'
+        }]
+    } else {
+        return [];
     }
 }
 
