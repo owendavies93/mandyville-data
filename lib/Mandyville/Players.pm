@@ -290,6 +290,26 @@ sub get_or_insert($self, $football_data_id, $player_info) {
     };
 }
 
+=item get_with_missing_understat_ids
+
+  Fetch all player IDs from the database without corresponding
+  understat IDs. Returns an arrayref of these IDs.
+
+=cut
+
+sub get_with_missing_understat_ids($self) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'id',
+        -from    => 'players',
+        -where   => {
+            understat_id => undef,
+        }
+    );
+
+    my $ids = $self->dbh->selectcol_arrayref($stmt, undef, @bind);
+    return $ids;
+}
+
 =item update_fixture_info ( FIXTURE_DATA )
 
   Process the player data for a fixture, inserting player data where

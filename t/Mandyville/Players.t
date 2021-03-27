@@ -137,7 +137,8 @@ use Mandyville::Players;
 }
 
 ######
-# TEST update_fixture_info and find_understat_id
+# TEST update_fixture_info, find_understat_id and
+#      get_with_missing_understat_ids
 ######
 
 {
@@ -204,7 +205,9 @@ use Mandyville::Players;
     );
 
     # Match the number of players in the test JSON
-    cmp_ok( $count, '==', 4,
+    my $player_count = 4;
+
+    cmp_ok( $count, '==', $player_count,
             'update_fixture_info: all player fixtures added' );
 
     # Test find_understat_id using the boilerplate from the existing
@@ -217,6 +220,11 @@ use Mandyville::Players;
     my $last = 'Carvajal';
     my $football_data_id = 3194;
     my $mandyville_id = $players->get_by_football_data_id($football_data_id);
+
+    my $ids = $players->get_with_missing_understat_ids;
+
+    cmp_ok( scalar @$ids, '==', $player_count,
+            'find_understat_id: correct player count without IDs' );
 
     $mock_understat->mock( 'search', sub {
         my ($self, $name) = @_;
@@ -244,6 +252,11 @@ use Mandyville::Players;
     throws_ok { $players->find_understat_id($mandyville_id) }
                 qr/Couldn't find understat ID/,
                 'find_understat_id: dies on unknown player';
+
+    $ids = $players->get_with_missing_understat_ids;
+
+    cmp_ok( scalar @$ids, '==', $player_count - 1,
+            'find_understat_id: correct count without IDs after insert' );
 }
 
 ######
