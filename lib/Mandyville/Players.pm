@@ -10,6 +10,7 @@ use Mandyville::Database;
 use Mandyville::Fixtures;
 
 use Carp;
+use List::Util qw(any);
 use SQL::Abstract::More;
 
 =head1 NAME
@@ -166,7 +167,7 @@ sub new($class, $options) {
   C<ID>. C<ID> refers to the mandyville database ID in this case. Runs
   through the following steps to attempt to do this:
 
-  * Work out the most recent team for the player
+  * Work out the most teams for the player
   * Search understat for the player's full name
   * If there's a result with the correct team, use that ID
   * If not, search for the player's last name
@@ -182,7 +183,7 @@ sub new($class, $options) {
 =cut
 
 sub find_understat_id($self, $id) {
-    my $most_recent_team = $self->_get_most_recent_team($id);
+    my $teams = $self->_get_teams($id);
 
     my ($first, $last) = $self->_get_name($id);
 
@@ -192,7 +193,7 @@ sub find_understat_id($self, $id) {
 
     foreach my $string (@options) {
         my $res = $self->_search_understat_and_store(
-            $string, $id, $most_recent_team
+            $string, $id, $teams
         );
 
         return $res if defined $res;
@@ -416,7 +417,7 @@ sub _get_api_info_and_store($self, $player_id) {
     return $id;
 }
 
-sub _get_most_recent_team($self, $id) {
+sub _get_teams($self, $id) {
     my ($stmt, @bind) = $self->sqla->select(
         -columns  => 't.name',
         -from     => [ -join => qw(
@@ -426,11 +427,10 @@ sub _get_most_recent_team($self, $id) {
         -where    => {
             player_id => $id,
         },
-        -order_by => [qw(-season -fixture_id)],
     );
 
-    my ($name) = $self->dbh->selectrow_array($stmt, undef, @bind);
-    return $name;
+    my ($names) = $self->dbh->selectcol_arrayref($stmt, undef, @bind);
+    return $names;
 }
 
 sub _get_name($self, $id) {
@@ -500,13 +500,13 @@ sub _insert_player_fixture($self, $info) {
     return $id;
 }
 
-sub _search_understat_and_store($self, $string, $id, $team) {
+sub _search_understat_and_store($self, $string, $id, $teams) {
     my $results = $self->uapi->search($string);
 
     return if scalar @$results == 0;
 
     foreach my $player (@$results) {
-        if ($team =~ /\Q$player->{team}\E/) {
+        if (any { $_ =~ /\Q$player->{team}\E/ } @$teams) {
             my ($stmt, @bind) = $self->sqla->update(
                 -table => 'players',
                 -set   => {
