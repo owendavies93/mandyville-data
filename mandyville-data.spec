@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.1
-Release:    2%{?dist}
+Release:    3%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -45,6 +45,7 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 %{_bindir}/send-healthcheck
 %{_bindir}/update-competition-data
 %{_bindir}/update-fixture-data
+%{_bindir}/update-understat-ids
 
 # Crons
 %{_sysconfdir}/cron.d/update-competition-data
@@ -61,6 +62,9 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Sat Mar 27 2021 Owen Davies <owen@odavi.es> - 0.0.1-3
+- Add script to fetch understat IDs
+
 * Thu Mar 25 2021 Owen Davies <owen@odavi.es> - 0.0.1-2
 - Add health checking for crons
 
