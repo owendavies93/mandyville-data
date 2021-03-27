@@ -189,7 +189,12 @@ sub find_understat_id($self, $id) {
 
     my $full = "$first $last";
 
-    my @options = ($full, $last, $first);
+    my @options;
+    if ($last ne '') {
+        @options = ($full, $last, $first);
+    } else {
+        @options = ($first);
+    }
 
     foreach my $string (@options) {
         my $res = $self->_search_understat_and_store(
@@ -199,7 +204,7 @@ sub find_understat_id($self, $id) {
         return $res if defined $res;
     }
 
-    die "Couldn't find understat ID for player #$id";
+    die "Couldn't find understat ID for player #$id: $full";
 }
 
 =item get_by_football_data_id ( FOOTBALL_DATA_ID )
