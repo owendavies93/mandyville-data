@@ -1,0 +1,70 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict;
+
+use Mandyville::API::Understat;
+use Mandyville::Database;
+use Mandyville::Players;
+use Mandyville::Utils qw(debug msg);
+
+use Const::Fast;
+use SQL::Abstract::More;
+use Try::Tiny;
+
+binmode(STDOUT, ':encoding(UTF-8)');
+binmode(STDERR, ':encoding(UTF-8)');
+
+const my $COMPS => [190, 201, 210, 225, 259, 269];
+
+my $db   = Mandyville::Database->new;
+my $sqla = SQL::Abstract::More->new;
+
+my $uapi = Mandyville::API::Understat->new;
+
+my $players = Mandyville::Players->new({
+    uapi => $uapi,
+    dbh  => $db->rw_db_handle(),
+    sqla => $sqla,
+});
+
+my $ids = $players->get_with_missing_understat_ids($COMPS);
+
+my $count = scalar @$ids;
+
+msg "$count player IDs to update";
+
+foreach my $id (@$ids) {
+    msg "Updating $id";
+
+    try {
+        $players->find_understat_id($id);
+        msg "Finished $id";
+    } catch {
+        if (/Couldn't find understat ID/) {
+            my ($id, $name) = $_ =~ /(\d+): ([\w\s]+) at/;
+            debug "$id\t$name";
+        } else {
+            die "$_";
+        }
+    };
+
+    sleep(1);
+}
+
+msg "Done!";
+
+=head1 NAME
+
+  update-understat-ids
+
+=head1 DESCRIPTION
+
+  Attempts to find understat IDs for all players in the database who
+  don't currently have an ID. Any players where we fail to update the
+  understat ID get printed to STDOUT, along with their database ID.
+
+  Only attempts to update IDs for players from competitions known to
+  understat.
+
+=cut
+
