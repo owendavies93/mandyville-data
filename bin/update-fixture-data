@@ -68,7 +68,7 @@ my $fixtures = Mandyville::Fixtures->new({
 });
 
 my $players = Mandyville::Players->new({
-    api       => $api,
+    fapi      => $api,
     comps     => $comps,
     countries => $countries,
     fixtures  => $fixtures,
