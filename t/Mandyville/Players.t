@@ -257,6 +257,11 @@ use Mandyville::Players;
 
     cmp_ok( scalar @$ids, '==', $player_count - 1,
             'find_understat_id: correct count without IDs after insert' );
+
+    my $with_comp_id = $players->get_with_missing_understat_ids([1]);
+
+    cmp_ok( scalar @$with_comp_id, '==', scalar @$ids,
+            'find_understat_id: matches with competition IDs' );
 }
 
 ######

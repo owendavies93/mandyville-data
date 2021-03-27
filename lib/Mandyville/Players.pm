@@ -296,21 +296,45 @@ sub get_or_insert($self, $football_data_id, $player_info) {
     };
 }
 
-=item get_with_missing_understat_ids
+=item get_with_missing_understat_ids ( COMP_IDS )
 
-  Fetch all player IDs from the database without corresponding
+  Fetch all player IDs from the database without correspondin
   understat IDs. Returns an arrayref of these IDs.
+
+  If C<COMP_IDS> is provided, only returns players who have known
+  fixtures in the competitions corresponding to the provided IDs
+  (regardless of whether they are currently playing in that
+  competition, or if their most recent fixture is in another
+  competiton).
 
 =cut
 
-sub get_with_missing_understat_ids($self) {
-    my ($stmt, @bind) = $self->sqla->select(
+sub get_with_missing_understat_ids($self, $comp_ids=[]) {
+    my %query = (
         -columns => 'id',
         -from    => 'players',
         -where   => {
             understat_id => undef,
         }
     );
+
+    if (scalar @$comp_ids > 0) {
+        %query = (
+            -columns => [-distinct => 'p.id'],
+            -from    => [ -join => qw(
+                players|p <=>{p.id=pf.player_id} players_fixtures|pf
+                          <=>{pf.fixture_id=f.id} fixtures|f
+            )],
+            -where   => {
+                'f.competition_id' => {
+                    -in => $comp_ids,
+                },
+                'p.understat_id' => undef,
+            }
+        );
+    }
+
+    my ($stmt, @bind) = $self->sqla->select(%query);
 
     my $ids = $self->dbh->selectcol_arrayref($stmt, undef, @bind);
     return $ids;
