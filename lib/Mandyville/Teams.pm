@@ -100,6 +100,26 @@ sub find_from_name($self, $name) {
     return $team_ids;
 }
 
+=item get_comps_for_season ( TEAM_ID, SEASON )
+
+  Get the competition IDs for the given team and season.
+
+=cut
+
+sub get_comps_for_season($self, $team_id, $season) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'competition_id',
+        -from    => 'teams_competitions',
+        -where   => {
+            team_id => $team_id,
+            season  => $season,
+        }
+    );
+
+    my $comp_ids = $self->dbh->selectcol_arrayref($stmt, undef, @bind);
+    return $comp_ids;
+}
+
 =item get_or_insert ( NAME, FOOTBAL_DATA_ID )
 
   Fetch the team assoicated with the C<NAME> and C<FOOTBAL_DATA_ID>.

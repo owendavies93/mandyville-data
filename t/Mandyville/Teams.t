@@ -64,7 +64,7 @@ use Mandyville::Teams;
 }
 
 ######
-# TEST get_or_insert_team_comp
+# TEST get_or_insert_team_comp and get_comps_for_season
 ######
 
 {
@@ -80,7 +80,7 @@ use Mandyville::Teams;
     my $comps = Mandyville::Competitions->new({
         dbh => $db->rw_db_handle(),
     });
-    
+
     my $football_data_id = 100;
     my $name = 'Chelsea';
     my $country_id = $countries->get_country_id('England');
@@ -112,6 +112,17 @@ use Mandyville::Teams;
 
     cmp_ok( $team_comp->{id}, '==', $team_comp_id,
             'get_or_insert_team_comp: team comp ID matches after get' );
+
+    dies_ok { $teams->get_comps_for_season }
+              'get_comps_for_season: dies without args';
+
+    my $comp_ids = $teams->get_comps_for_season($team_id, $season);
+
+    cmp_ok( scalar @$comp_ids, '==', 1,
+            'get_comps_for_season: returns correct number of comp IDs' );
+
+    cmp_ok( $comp_ids->[0], '==', $comp->{id},
+            'get_comps_for_season: returns correct competition ID' );
 }
 
 done_testing();
