@@ -72,6 +72,26 @@ sub new($class, $options) {
     return $self;
 }
 
+=item find_from_name ( NAME )
+
+  Attemps to find the team based on the provided C<NAME>. Returns all
+  team IDs that contain C<NAME>.
+
+=cut
+
+sub find_from_name($self, $name) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'id',
+        -from    => 'teams',
+        -where   => {
+            'name' => { like => "%$name%" }
+        }
+    );
+
+    my $team_ids = $self->dbh->selectcol_arrayref($stmt, undef, @bind);
+    return $team_ids;
+}
+
 =item get_or_insert ( NAME, FOOTBAL_DATA_ID )
 
   Fetch the team assoicated with the C<NAME> and C<FOOTBAL_DATA_ID>.

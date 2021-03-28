@@ -19,7 +19,7 @@ require_ok 'Mandyville::Teams';
 use Mandyville::Teams;
 
 ######
-# TEST get_or_insert
+# TEST get_or_insert and find_from_name
 ######
 
 {
@@ -44,6 +44,18 @@ use Mandyville::Teams;
     $data = $teams->get_or_insert($name, $football_data_id);
 
     cmp_ok( $data->{id}, '==', $id, 'get_or_insert: id matches after get' );
+
+    my $results = $teams->find_from_name('Chelsea');
+
+    cmp_ok( scalar @$results, '==', 1, 'find_from_name: correct results' );
+
+    $results = $teams->find_from_name('Chelsea FC');
+
+    cmp_ok( scalar @$results, '==', 0, 'find_from_name: correct no results' );
+
+    $results = $teams->find_from_name('hel');
+
+    cmp_ok( scalar @$results, '==', 1, 'find_from_name: correct results' );
 }
 
 ######
