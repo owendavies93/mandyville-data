@@ -2,6 +2,9 @@
 
 use Mojo::Base -strict;
 
+use Mandyville::Utils qw(find_file);
+
+use Mojo::File;
 use Test::Exception;
 use Test::MockObject::Extends;
 use Test::More;
@@ -59,6 +62,28 @@ use Mandyville::API::Understat;
 
     throws_ok { $api->search($new_name) } qr/Unknown error/,
                 'search: dies on non-success response';
+}
+
+######
+# TEST player
+######
+
+{
+    my $api = Mandyville::API::Understat->new;
+
+    dies_ok { $api->player } 'player: dies without args';
+
+    my $html = Mojo::File->new(find_file('t/data/player.html'))->slurp;
+    my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
+    $mock_ua->mock( 'get', sub {
+        return $api->_get_tx($html);
+    });
+
+    $api->ua($mock_ua);
+
+    my $matches = $api->player(1);
+
+    cmp_ok( scalar @$matches, '==', 1, 'player: correct matches' );
 }
 
 done_testing();

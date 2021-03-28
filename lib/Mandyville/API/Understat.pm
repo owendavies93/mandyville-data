@@ -3,6 +3,8 @@ package Mandyville::API::Understat;
 use Mojo::Base 'Mandyville::API', -signatures;
 
 use Const::Fast;
+use Mojo::DOM;
+use Mojo::JSON qw(decode_json);
 use Mojo::Util qw(url_escape);
 
 =head1 NAME
@@ -24,12 +26,29 @@ use Mojo::Util qw(url_escape);
 
 const my $BASE_URL => "https://understat.com/";
 const my $PARSERS  => {
-    'main/getPlayersName' => sub { return shift },
+    'main/getPlayersName' => sub { return $_[1] },
+    'player'              => \&_parse_match_info,
 };
 
 =head1 METHODS
 
 =over
+
+=item dom
+
+  An instance of Mojo::DOM
+
+=cut
+
+has 'dom' => sub { Mojo::DOM->new };
+
+=item player ( ID )
+
+=cut
+
+sub player($self, $id) {
+    return $self->get("player/$id");
+}
 
 =item search ( NAME )
 
@@ -60,7 +79,21 @@ sub _get($self, $path) {
 
     $path =~ s/\/[^\/]+(?:\/?)$//;
 
-    return $PARSERS->{$path}->($body);
+    return $PARSERS->{$path}->($self, $body);
+}
+
+sub _parse_match_info($self, $body) {
+    my $match_info = $self->dom->parse($body)->find('script')->[4]->text;
+
+    $match_info =~ /matchesData/ or die "No match data found in script tag";
+
+    # Strip everything away except the JSON string and attempt to parse it
+    # Convert the hex escape sequences to their ASCII versions
+    $match_info =~ s/var matchesData=JSON.parse\('//;
+    $match_info =~ s/'\);//g;
+    $match_info =~ s/\\\\x(\w{2})/chr(hex($1))/eg;
+
+    return $match_info;
 }
 
 sub _rate_limit($self) {
