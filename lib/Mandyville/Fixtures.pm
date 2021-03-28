@@ -7,6 +7,7 @@ use Mandyville::Countries;
 use Mandyville::Database;
 use Mandyville::Teams;
 
+use Array::Utils qw(intersect);
 use Carp;
 use SQL::Abstract::More;
 
@@ -99,6 +100,73 @@ sub new($class, $options) {
 
     bless $self, $class;
     return $self;
+}
+
+=item find_fixture_from_understat_data ( UNDERSTAT_DATA )
+
+  Attempts to find a fixture for the given C<UNDERSTAT_DATA>. Finds all
+  teams matching the home and away team names, finds the combinations
+  of those home and away teams that played in the same competition(s)
+  in the given season (which is provided by the understat data), and
+  finds all fixtures that match those combinations of home and away
+  teams in that season.
+
+  This will almost always result in one fixture, but it's possible that
+  teams could play each other multiple times at the same venue in the
+  same season, because of:
+
+    * Domestic cup competitions;
+    * Continental cup competitions;
+    * Leagues with splits like the SPL;
+
+  But understat doesn't have data on these competitions so there should
+  only be one fixture returned. Returns the database ID of the fixture.
+
+  This would be a lot simpler if we stored date info with fixtures, but
+  currently we don't...
+
+=cut
+
+sub find_fixture_from_understat_data($self, $understat_data) {
+    my $season = $understat_data->{season};
+    my $home_team_ids =
+        $self->teams->find_from_name($understat_data->{h_team});
+    my $away_team_ids =
+        $self->teams->find_from_name($understat_data->{a_team});
+
+    my $away_comps = {};
+    foreach my $id (@$away_team_ids) {
+        $away_comps->{$id} = $self->teams->get_comps_for_season($id, $season);
+    }
+
+    my $matching_comp_id;
+    my $matching_home_id;
+    my $matching_away_id;
+    OUTER: foreach my $id (@$home_team_ids) {
+        my $home_comp_ids = $self->teams->get_comps_for_season($id, $season);
+
+        foreach my $a_id (keys %$away_comps) {
+            my $away_comp_ids = $away_comps->{$a_id};
+            my @match = intersect(@$home_comp_ids, @$away_comp_ids);
+            if (scalar @match > 0) {
+                # Assume that the first match is the only match for now
+                $matching_comp_id = $match[0];
+                $matching_home_id = $id;
+                $matching_away_id = $a_id;
+                last OUTER;
+            }
+        }
+    }
+
+    if (!defined $matching_comp_id) {
+        my $home = $understat_data->{h_team};
+        my $away = $understat_data->{a_team};
+        die "No competition ID found! $home - $away - $season";
+    }
+
+    my $fixture = $self->get_or_insert(
+        $matching_comp_id, $matching_home_id, $matching_away_id, $season, {});
+    return $fixture->{id};
 }
 
 =item get_or_insert ( COMP_ID, HOME_ID, AWAY_ID, SEASON, MATCH_INFO )

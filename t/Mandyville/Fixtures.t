@@ -24,7 +24,7 @@ require_ok 'Mandyville::Fixtures';
 use Mandyville::Fixtures;
 
 ######
-# TEST get_or_insert
+# TEST get_or_insert and find_fixture_from_understat_data
 ######
 
 {
@@ -36,7 +36,7 @@ use Mandyville::Fixtures;
 
     my $countries = Mandyville::Countries->new({
         dbh => $dbh->rw_db_handle(),
-    }); 
+    });
 
     my $comp = Mandyville::Competitions->new({
         countries => $countries,
@@ -91,7 +91,31 @@ use Mandyville::Fixtures;
         $comp_data->{id}, $home_team_id, $away_team_id, $season, $match_info
     );
 
-    cmp_ok( $fixture_data->{id}, '==', $id );
+    cmp_ok( $fixture_data->{id}, '==', $id, 'get_or_insert: returns same ID' );
+
+    $teams->get_or_insert_team_comp($home_team_id, $season, $comp_data->{id});
+    $teams->get_or_insert_team_comp($away_team_id, $season, $comp_data->{id});
+
+    dies_ok { $fixtures->find_fixture_from_understat_data }
+              'find_fixture_from_understat_data: dies without args';
+
+    my $understat_data = {
+        h_team => $home,
+        a_team => $away,
+        season => 2018,
+    };
+
+    my $fixture_id =
+        $fixtures->find_fixture_from_understat_data($understat_data);
+
+    cmp_ok( $fixture_id, '==', $id,
+            'find_fixture_from_understat_data: returns correct ID' );
+
+    $understat_data->{h_team} = 'Liverpool';
+
+    throws_ok { $fixtures->find_fixture_from_understat_data($understat_data) }
+                qr/No competition ID found/,
+                'find_fixture_from_understat_data: dies if comp not found';
 }
 
 ######

@@ -2,6 +2,7 @@
 requires 'Mojo::Base';
 
 # libs
+requires 'Array::Utils';
 requires 'Capture::Tiny';
 requires 'Const::Fast';
 requires 'Cpanel::JSON::XS';

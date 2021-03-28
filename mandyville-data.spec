@@ -8,6 +8,7 @@ URL:        https://github.com/sirgraystar/mandyville-data
 Source0:    %{name}-%{version}-%{release}.tar.gz
 
 Requires:   moreutils
+Requires:   perl(Array::Utils)
 Requires:   perl(Capture::Tiny)
 Requires:   perl(Const::Fast)
 Requires:   perl(Cpanel::JSON::XS)
