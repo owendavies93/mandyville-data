@@ -56,6 +56,11 @@ use Mandyville::Teams;
     $results = $teams->find_from_name('hel');
 
     cmp_ok( scalar @$results, '==', 1, 'find_from_name: correct results' );
+
+    $results = $teams->find_from_name('hel');
+
+    cmp_ok( scalar @$results, '==', 1,
+            'find_from_name: correct results from cache' );
 }
 
 ######

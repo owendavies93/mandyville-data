@@ -31,6 +31,10 @@ use SQL::Abstract::More;
 
 =over
 
+=item cache
+
+  A simple in-memory cache for team name lookups.
+
 =item dbh 
 
   A read-write handle to the Mandyville database.
@@ -41,8 +45,9 @@ use SQL::Abstract::More;
 
 =cut
 
-has 'dbh'  => sub { shift->{dbh} };
-has 'sqla' => sub { shift->{sqla} };
+has 'cache' => sub { {} };
+has 'dbh'   => sub { shift->{dbh} };
+has 'sqla'  => sub { shift->{sqla} };
 
 =item new ([ OPTIONS ])
 
@@ -80,6 +85,8 @@ sub new($class, $options) {
 =cut
 
 sub find_from_name($self, $name) {
+    return $self->cache->{$name} if defined $self->cache->{$name};
+
     my ($stmt, @bind) = $self->sqla->select(
         -columns => 'id',
         -from    => 'teams',
@@ -89,6 +96,7 @@ sub find_from_name($self, $name) {
     );
 
     my $team_ids = $self->dbh->selectcol_arrayref($stmt, undef, @bind);
+    $self->cache->{$name} = $team_ids;
     return $team_ids;
 }
 
