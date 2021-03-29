@@ -210,6 +210,13 @@ use Mandyville::Players;
     cmp_ok( $count, '==', $player_count,
             'update_fixture_info: all player fixtures added' );
 
+    dies_ok { $players->get_team_for_player_fixture }
+              'get_team_for_player_fixture: dies without args';
+
+    my $team_id = $players->get_team_for_player_fixture(1, 1);
+
+    ok( $team_id, 'get_team_for_player_fixture: returns ID' );
+
     # Test find_understat_id using the boilerplate from the existing
     # test
     my $mock_understat = Test::MockObject::Extends->new(

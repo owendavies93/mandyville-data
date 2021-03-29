@@ -305,6 +305,27 @@ sub get_or_insert($self, $football_data_id, $player_info) {
     };
 }
 
+=item get_team_for_player_fixture ( PLAYER_ID, FIXTURE_ID )
+
+  Fetch the team ID for the given C<PLAYER_ID> and C<FIXTURE_ID>
+  from the C<players_fixtures> DB table.
+
+=cut
+
+sub get_team_for_player_fixture($self, $player_id, $fixture_id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'team_id',
+        -from    => 'players_fixtures',
+        -where   => {
+            fixture_id => $fixture_id,
+            player_id  => $player_id,
+        }
+    );
+
+    my ($team_id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    return $team_id;
+}
+
 =item get_with_missing_understat_ids ( COMP_IDS )
 
   Fetch all player IDs from the database without correspondin
