@@ -328,7 +328,7 @@ sub get_team_for_player_fixture($self, $player_id, $fixture_id) {
 
 =item get_with_missing_understat_ids ( COMP_IDS )
 
-  Fetch all player IDs from the database without correspondin
+  Fetch all player IDs from the database without corresponding
   understat IDs. Returns an arrayref of these IDs.
 
   If C<COMP_IDS> is provided, only returns players who have known
