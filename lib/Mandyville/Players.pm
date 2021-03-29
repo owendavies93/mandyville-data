@@ -431,6 +431,7 @@ sub update_understat_fixture_info(
 
         if ($_ eq 'position') {
             my $position_id = $self->_get_position_id($understat_info->{$_});
+            $to_insert->{position_id} = $position_id;
         } elsif (exists $UNDERSTAT_MAPPINGS->{$_}) {
             $to_insert->{$UNDERSTAT_MAPPINGS->{$_}} = $understat_info->{$_};
         } else {
