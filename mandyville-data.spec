@@ -16,6 +16,7 @@ Requires:   perl(Dir::Self)
 Requires:   perl(DBD::Pg)
 Requires:   perl(DBI)
 Requires:   perl(File::Temp)
+Requires:   perl(Mojo::Base)
 Requires:   perl(SQL::Abstract::More)
 Requires:   perl(YAML::XS)
 
