@@ -42,7 +42,11 @@ foreach my $id (@$ids) {
     } catch {
         if (/Couldn't find understat ID/) {
             my ($id, $name) = $_ =~ /(\d+): ([\w\s]+) at/;
-            debug "$id\t$name";
+        } elsif (/malformed JSON string/) {
+            debug "Got error from understat, sleeping and retrying";
+            sleep(10);
+            $players->find_understat_id($id);
+            msg "Finished $id";
         } else {
             die "$_";
         }
