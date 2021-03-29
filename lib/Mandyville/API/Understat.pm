@@ -61,6 +61,7 @@ sub player($self, $id) {
 =cut
 
 sub search($self, $name) {
+    $name =~ s/'//g;
     my $response = $self->get('main/getPlayersName/' . $name);
 
     return $response->{response}->{players}
