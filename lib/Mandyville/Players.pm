@@ -9,9 +9,18 @@ use Mandyville::Countries;
 use Mandyville::Database;
 use Mandyville::Fixtures;
 
+use Const::Fast;
 use Carp;
 use List::Util qw(any);
 use SQL::Abstract::More;
+
+const my $UNDERSTAT_MAPPINGS => {
+    npxG      => 'npxg',
+    xA        => 'xa',
+    xG        => 'xg',
+    xGBuildup => 'xg_buildup',
+    xGChain   => 'xg_chain',
+};
 
 =head1 NAME
 
@@ -365,6 +374,48 @@ sub update_fixture_info($self, $fixture_data) {
         $fixture_id, $away_id, $fixture_data, $fixture_data->{awayTeam});
 }
 
+=item update_understat_fixture_info ( PLAYER_ID, FIXTURE_ID, TEAM_ID, UNDERSTAT_INFO )
+
+  Add the understat information for the fixture event specified by the
+  given C<PLAYER_ID>, C<FIXTURE_ID>, C<TEAM_ID>.
+
+  Returns the status of the row update operation, i.e. 1 if the update
+  succeeded, 0 if the update failed.
+
+=cut
+
+sub update_understat_fixture_info(
+    $self, $player_id, $fixture_id, $team_id, $understat_info) {
+
+    my $to_insert = {};
+    for (qw(goals assists key_passes xG xA xGBuildup xGChain npg npxG
+            position)) {
+
+        croak "$_ not provided in understat info"
+            unless defined $understat_info->{$_};
+
+        if ($_ eq 'position') {
+            my $position_id = $self->_get_position_id($understat_info->{$_});
+        } elsif (exists $UNDERSTAT_MAPPINGS->{$_}) {
+            $to_insert->{$UNDERSTAT_MAPPINGS->{$_}} = $understat_info->{$_};
+        } else {
+            $to_insert->{$_} = $understat_info->{$_};
+        }
+    }
+
+    my ($stmt, @bind) = $self->sqla->update(
+        -table => 'players_fixtures',
+        -set   => $to_insert,
+        -where => {
+            fixture_id => $fixture_id,
+            player_id  => $player_id,
+            team_id    => $team_id,
+        }
+    );
+
+    return $self->dbh->do($stmt, undef, @bind);
+}
+
 sub _process_team_info($self, $fixture_id, $team_id, $fixture_data, $team_info) {
     my $starters = $team_info->{lineup};
     my $subs     = $team_info->{bench};
@@ -473,6 +524,20 @@ sub _get_name($self, $id) {
 
     my ($first, $last) = $self->dbh->selectrow_array($stmt, undef, @bind);
     return ($first, $last);
+}
+
+sub _get_position_id($self, $position) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'id',
+        -from    => 'positions',
+        -where   => {
+            'name' => $position,
+        }
+    );
+
+    my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    return $id;
 }
 
 sub _sanitise_name($self, $player_info) {

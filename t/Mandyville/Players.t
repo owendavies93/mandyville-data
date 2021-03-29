@@ -137,8 +137,8 @@ use Mandyville::Players;
 }
 
 ######
-# TEST update_fixture_info, find_understat_id and
-#      get_with_missing_understat_ids
+# TEST update_fixture_info, find_understat_id,
+#      get_with_missing_understat_ids, update_understat_fixture_info
 ######
 
 {
@@ -262,6 +262,49 @@ use Mandyville::Players;
 
     cmp_ok( scalar @$with_comp_id, '==', scalar @$ids,
             'find_understat_id: matches with competition IDs' );
+
+    my $understat_data = {
+        a_goals => "2",
+        a_team => "Liverpool",
+        assists => "0",
+        date => "2021-03-06",
+        goals => "0",
+        h_goals => "1",
+        h_team => "Real Madrid",
+        id => "14696",
+        key_passes => "0",
+        npg => "0",
+        npxG => "0.02079845406115055",
+        position => "MC",
+        roster_id => "454921",
+        season => "2017",
+        shots => "1",
+        time => "72",
+        xA => "0",
+        xG => "0.02079845406115055",
+        xGBuildup => "0",
+        xGChain => "0.02079845406115055"
+    };
+
+    my $fixture_id =
+        $fixtures->find_fixture_from_understat_data($understat_data);
+
+    dies_ok { players->update_understat_fixture_info }
+              'update_understat_fixture_info: dies without args';
+
+    throws_ok {
+        $players->update_understat_fixture_info(
+            $mandyville_id, $fixture_id, 1, {}
+        )
+    } qr/not provided/,
+      'update_understat_fixture_info: dies without fixture info';
+
+    my $status = $players->update_understat_fixture_info(
+        $mandyville_id, $fixture_id, 1, $understat_data
+    );
+
+    cmp_ok( $status, '==', 1,
+            'update_understat_fixture_info: correctly updates' );
 }
 
 ######
