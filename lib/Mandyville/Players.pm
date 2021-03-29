@@ -408,6 +408,20 @@ sub update_fixture_info($self, $fixture_data) {
 sub update_understat_fixture_info(
     $self, $player_id, $fixture_id, $team_id, $understat_info) {
 
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'goals',
+        -from    => 'players_fixtures',
+        -where   => {
+            fixture_id => $fixture_id,
+            player_id  => $player_id,
+            team_id    => $team_id,
+        }
+    );
+
+    my ($goals) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    return 0 if defined $goals;
+
     my $to_insert = {};
     for (qw(goals assists key_passes xG xA xGBuildup xGChain npg npxG
             position)) {
@@ -424,7 +438,7 @@ sub update_understat_fixture_info(
         }
     }
 
-    my ($stmt, @bind) = $self->sqla->update(
+    ($stmt, @bind) = $self->sqla->update(
         -table => 'players_fixtures',
         -set   => $to_insert,
         -where => {
