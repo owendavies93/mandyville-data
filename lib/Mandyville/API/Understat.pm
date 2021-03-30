@@ -5,7 +5,6 @@ use Mojo::Base 'Mandyville::API', -signatures;
 use Const::Fast;
 use Mojo::DOM;
 use Mojo::JSON qw(decode_json);
-use Mojo::Util qw(url_escape);
 
 =head1 NAME
 
@@ -62,7 +61,7 @@ sub player($self, $id) {
 =cut
 
 sub search($self, $name) {
-    my $response = $self->get('main/getPlayersName/' . url_escape($name));
+    my $response = $self->get('main/getPlayersName/' . $name);
 
     return $response->{response}->{players}
         if defined $response->{response}->{success};
