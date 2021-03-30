@@ -119,6 +119,12 @@ use Mandyville::Fixtures;
                 ) }
                 qr/No competition ID found/,
                 'find_fixture_from_understat_data: dies if comp not found';
+
+    $understat_data->{season} = 2017;
+
+    ok( !$fixtures->find_fixture_from_understat_data(
+            $understat_data, [$comp_data->{id}]
+        ), 'find_fixture_from_understat_data: returns undef if old season' );
 }
 
 ######

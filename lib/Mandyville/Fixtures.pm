@@ -13,6 +13,8 @@ use Const::Fast;
 use List::Util qw(any);
 use SQL::Abstract::More;
 
+const my $MIN_SEASON => 2018;
+
 =head1 NAME
 
   Mandyville::Fixtures - fetch and store fixture data
@@ -134,6 +136,9 @@ sub new($class, $options) {
 
 sub find_fixture_from_understat_data($self, $understat_data, $comps) {
     my $season = $understat_data->{season};
+
+    return if $season < $MIN_SEASON;
+
     my $home_team_ids =
         $self->teams->find_from_name($understat_data->{h_team});
     my $away_team_ids =
