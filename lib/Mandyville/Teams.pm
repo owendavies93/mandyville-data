@@ -80,7 +80,9 @@ sub new($class, $options) {
 =item find_from_name ( NAME )
 
   Attemps to find the team based on the provided C<NAME>. Returns all
-  team IDs that contain C<NAME>.
+  team IDs that contain C<NAME>. Checks the C<team_alternate_names>
+  table for exact matches if no partial match in the C<teams> table
+  is found. Caches the result in memory.
 
 =cut
 
@@ -96,6 +98,20 @@ sub find_from_name($self, $name) {
     );
 
     my $team_ids = $self->dbh->selectcol_arrayref($stmt, undef, @bind);
+
+    if (scalar @$team_ids == 0) {
+        ($stmt, @bind) = $self->sqla->select(
+            -columns => 'team_id',
+            -from    => 'team_alternate_names',
+            -where   => {
+                'name' => $name
+            }
+        );
+
+        my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+        $team_ids = [$id] if defined $id;
+    }
+
     $self->cache->{$name} = $team_ids;
     return $team_ids;
 }

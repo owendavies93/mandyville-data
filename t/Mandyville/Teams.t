@@ -61,6 +61,22 @@ use Mandyville::Teams;
 
     cmp_ok( scalar @$results, '==', 1,
             'find_from_name: correct results from cache' );
+
+    $data = $teams->get_or_insert('Test', 101);
+    $id = $data->{id};
+
+    $db->rw_db_handle()->do("
+        INSERT INTO team_alternate_names (team_id, name)
+        VALUES ($id, 'Alternate')
+    ");
+
+    $results = $teams->find_from_name('Alternate');
+
+    cmp_ok( scalar @$results, '==', 1,
+            'find_from_name: correct results from alternate names' );
+
+    cmp_ok( $results->[0], '==', $id,
+            'find_from_name: correct ID from alternate names' );
 }
 
 ######
