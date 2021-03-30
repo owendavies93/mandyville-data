@@ -105,15 +105,18 @@ use Mandyville::Fixtures;
         season => 2018,
     };
 
-    my $fixture_id =
-        $fixtures->find_fixture_from_understat_data($understat_data);
+    my $fixture_id = $fixtures->find_fixture_from_understat_data(
+        $understat_data, [$comp_data->{id}]
+    );
 
     cmp_ok( $fixture_id, '==', $id,
             'find_fixture_from_understat_data: returns correct ID' );
 
     $understat_data->{h_team} = 'Liverpool';
 
-    throws_ok { $fixtures->find_fixture_from_understat_data($understat_data) }
+    throws_ok { $fixtures->find_fixture_from_understat_data(
+                    $understat_data, [$comp_data->{id}]
+                ) }
                 qr/No competition ID found/,
                 'find_fixture_from_understat_data: dies if comp not found';
 }

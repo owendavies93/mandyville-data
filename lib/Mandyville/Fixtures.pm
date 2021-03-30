@@ -9,6 +9,8 @@ use Mandyville::Teams;
 
 use Array::Utils qw(intersect);
 use Carp;
+use Const::Fast;
+use List::Util qw(any);
 use SQL::Abstract::More;
 
 =head1 NAME
@@ -20,7 +22,7 @@ use SQL::Abstract::More;
   use Mandyville::Fixtures;
   my $dbh  = Mandyville::Database->new->rw_db_handle();
   my $sqla = SQL::Abstract::More->new;
-  
+
   my $fixtures = Mandyville::Fixtures->new({
       comps => Mandyville::Competitions->new({}),
       dbh   => $dbh,
@@ -73,7 +75,7 @@ has 'teams' => sub { shift->{teams} };
     * teams => An instance of Mandyville::Teams
 
   If these options aren't passed in, they will be instantied by this
-  method. However, it's recommended to pass these options in for 
+  method. However, it's recommended to pass these options in for
   performance and memory usage reasons.
 
 =cut
@@ -102,7 +104,7 @@ sub new($class, $options) {
     return $self;
 }
 
-=item find_fixture_from_understat_data ( UNDERSTAT_DATA )
+=item find_fixture_from_understat_data ( UNDERSTAT_DATA, COMPS )
 
   Attempts to find a fixture for the given C<UNDERSTAT_DATA>. Finds all
   teams matching the home and away team names, finds the combinations
@@ -119,15 +121,18 @@ sub new($class, $options) {
     * Continental cup competitions;
     * Leagues with splits like the SPL;
 
-  But understat doesn't have data on these competitions so there should
-  only be one fixture returned. Returns the database ID of the fixture.
+  This is solved by passing an arrayref of competition IDs as C<COMPS>,
+  which are the set of competition IDs that fixtures are allowed to be
+  from.
+
+  Returns the database ID of the fixture.
 
   This would be a lot simpler if we stored date info with fixtures, but
   currently we don't...
 
 =cut
 
-sub find_fixture_from_understat_data($self, $understat_data) {
+sub find_fixture_from_understat_data($self, $understat_data, $comps) {
     my $season = $understat_data->{season};
     my $home_team_ids =
         $self->teams->find_from_name($understat_data->{h_team});
@@ -144,13 +149,17 @@ sub find_fixture_from_understat_data($self, $understat_data) {
     my $matching_away_id;
     OUTER: foreach my $id (@$home_team_ids) {
         my $home_comp_ids = $self->teams->get_comps_for_season($id, $season);
+        my @matching_comps = intersect(@$home_comp_ids, @$comps);
+
+        next if scalar @matching_comps == 0;
+
+        my $home_comp_id = $matching_comps[0];
 
         foreach my $a_id (keys %$away_comps) {
             my $away_comp_ids = $away_comps->{$a_id};
-            my @match = intersect(@$home_comp_ids, @$away_comp_ids);
-            if (scalar @match > 0) {
-                # Assume that the first match is the only match for now
-                $matching_comp_id = $match[0];
+
+            if (any { $_ == $home_comp_id } @$away_comp_ids) {
+                $matching_comp_id = $home_comp_id;
                 $matching_home_id = $id;
                 $matching_away_id = $a_id;
                 last OUTER;
