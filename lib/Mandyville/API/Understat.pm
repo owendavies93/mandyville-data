@@ -88,9 +88,10 @@ sub _parse_match_info($self, $body) {
 
     # Strip everything away except the JSON string and attempt to parse it
     # Convert the hex escape sequences to their ASCII versions
-    $match_info =~ s/var matchesData=JSON.parse\('//;
+    $match_info =~ s/var matchesData\s*=\s*JSON.parse\('//;
     $match_info =~ s/'\);//g;
     $match_info =~ s/\\\\x(\w{2})/chr(hex($1))/eg;
+    $match_info =~ s/\\x(\w{2})/chr(hex($1))/eg;
 
     return $match_info;
 }
