@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.1
-Release:    4%{?dist}
+Release:    5%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -49,6 +49,7 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 %{_bindir}/update-competition-data
 %{_bindir}/update-fixture-data
 %{_bindir}/update-understat-ids
+%{_bindir}/update-understat-info
 
 # Crons
 %{_sysconfdir}/cron.d/update-competition-data
@@ -65,6 +66,9 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Tue Mar 30 2021 Owen Davies <owen@odavi.es> - 0.0.1-5
+- Add missing Mojo::Base dependancy
+
 * Sun Mar 28 2021 Owen Davies <owen@odavi.es> - 0.0.1-4
 - Escape percentage signs in crons
 
