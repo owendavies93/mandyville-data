@@ -161,6 +161,7 @@ sub find_fixture_from_understat_data($self, $understat_data, $comps) {
         my $home_comp_id = $matching_comps[0];
 
         foreach my $a_id (keys %$away_comps) {
+            next if $a_id == $id;
             my $away_comp_ids = $away_comps->{$a_id};
 
             if (any { $_ == $home_comp_id } @$away_comp_ids) {
