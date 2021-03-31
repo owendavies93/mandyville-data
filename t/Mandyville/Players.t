@@ -195,7 +195,8 @@ use Mandyville::Players;
                 qr/Unknown competition/,
                 'update_fixture_info: dies on unknown competition';
 
-    $comps->get_or_insert('Europe', 250, 2001, 1);
+    my $comp = $comps->get_or_insert('Europe', 250, 2001, 1);
+    my $comp_id = $comp->{id};
 
     ok( $players->update_fixture_info($fixture_info),
         'update_fixture_info: updates successfully' );
@@ -284,7 +285,7 @@ use Mandyville::Players;
         npxG => "0.02079845406115055",
         position => "MC",
         roster_id => "454921",
-        season => "2017",
+        season => "2018",
         shots => "1",
         time => "72",
         xA => "0",
@@ -293,8 +294,9 @@ use Mandyville::Players;
         xGChain => "0.02079845406115055"
     };
 
-    my $fixture_id =
-        $fixtures->find_fixture_from_understat_data($understat_data);
+    my $fixture_id = $fixtures->find_fixture_from_understat_data(
+        $understat_data, [ $comp_id ]
+    );
 
     dies_ok { players->update_understat_fixture_info }
               'update_understat_fixture_info: dies without args';
