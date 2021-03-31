@@ -1,1 +1,1 @@
-1 0 * * * mandyville /usr/bin/update-fixture-data | ts '[\%Y-\%m-\%d \%H:\%M:\%S]' > /var/log/mandyville/update-fixture-data.log 2>&1 && send-healthcheck --name update-fixture-data
+1 0 * * * mandyville /usr/bin/update-fixture-data 2>&1 | ts '[\%Y-\%m-\%d \%H:\%M:\%S]' >> /var/log/mandyville/update-fixture-data.log && send-healthcheck --name update-fixture-data

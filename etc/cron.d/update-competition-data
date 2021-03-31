@@ -1,1 +1,1 @@
-0 1 1 * * mandyville /usr/bin/update-competition-data | ts '[\%Y-\%m-\%d \%H:\%M:\%S]' > /var/log/mandyville/update-competition-data.log 2>&1 && send-healthcheck --name update-competition-data
+0 1 1 * * mandyville /usr/bin/update-competition-data 2>&1 | ts '[\%Y-\%m-\%d \%H:\%M:\%S]' >> /var/log/mandyville/update-competition-data.log && send-healthcheck --name update-competition-data
