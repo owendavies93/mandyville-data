@@ -21,6 +21,7 @@ requires 'Test::Exception';
 requires 'Test::MockModule';
 requires 'Test::MockObject::Extends';
 requires 'Test::MockSleep';
+requires 'Test::MockTime';
 requires 'Test::Output';
 requires 'Test::Perl::Critic';
 requires 'Test::Pod';
