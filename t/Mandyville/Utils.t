@@ -4,6 +4,7 @@ use Mojo::Base -strict;
 
 use Test::Exception;
 use Test::Output;
+use Test::MockTime qw(set_absolute_time);
 use Test::More;
 use Test::Warn;
 
@@ -14,7 +15,7 @@ use Test::Warn;
 use_ok 'Mandyville::Utils';
 require_ok 'Mandyville::Utils';
 
-use Mandyville::Utils qw(debug find_file msg);
+use Mandyville::Utils qw(current_season debug find_file msg);
 
 ######
 # TEST debug
@@ -50,6 +51,18 @@ use Mandyville::Utils qw(debug find_file msg);
 {
     my $msg = 'hello';
     stdout_is { msg($msg) } "Utils.t: hello\n", 'msg: correct message';
+}
+
+######
+# TEST current_season
+######
+
+{
+    set_absolute_time('2020-01-01T00:00:00Z');
+    cmp_ok( current_season, '==', 2019, 'current_season: correct year' );
+
+    set_absolute_time('2020-08-01T00:00:00Z');
+    cmp_ok( current_season, '==', 2020, 'current_season: correct year' );
 }
 
 done_testing();

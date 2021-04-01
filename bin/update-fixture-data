@@ -9,10 +9,9 @@ use Mandyville::Database;
 use Mandyville::Players;
 use Mandyville::Fixtures;
 use Mandyville::Teams;
-use Mandyville::Utils qw(debug msg);
+use Mandyville::Utils qw(current_season debug msg);
 
 use Getopt::Long;
-use POSIX qw(strftime);
 use SQL::Abstract::More;
 use Try::Tiny;
 
@@ -26,15 +25,7 @@ GetOptions(
 
 if (!defined $season) {
     msg 'Season not provided. Using default.';
-    my $year  = strftime "%Y", localtime;
-    my $month = strftime "%m", localtime;
-
-    if ($month < 7) {
-        msg "Month is $month, assume we're in the previous season";
-        $season = $year - 1;
-    } else {
-        $season = $year;
-    }
+    $season = current_season();
 }
 
 msg "Processing season $season";

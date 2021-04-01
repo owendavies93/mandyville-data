@@ -5,8 +5,9 @@ use Mojo::Base 'Exporter', -signatures;
 use Const::Fast;
 use Cwd qw(realpath);
 use Dir::Self;
+use POSIX qw(strftime);
 
-our @EXPORT_OK = qw(debug find_file msg);
+our @EXPORT_OK = qw(current_season debug find_file msg);
 
 const my $MAX_DEPTH => 5;
 
@@ -29,10 +30,27 @@ const my $MAX_DEPTH => 5;
 
 =over
 
+=item current_season
+
+  Return the year for the current season, in YYYY format. If the
+  current month is June or earlier, assume we're still in the
+  previous season.
+
+=cut
+
+sub current_season {
+    my $year  = strftime "%Y", localtime;
+    my $month = strftime "%m", localtime;
+
+    my $season = $month < 7 ? $year - 1 : $year;
+
+    return $season;
+}
+
 =item debug ( TEXT )
 
   Print a message to STDERR, including the name of the script that the
-  message originated from. Returns the warned message including the 
+  message originated from. Returns the warned message including the
   script name.
 
 =cut
@@ -45,9 +63,9 @@ sub debug($text) {
 
 =item find_file ( FILE )
 
-  Finds the relative path to C<FILE> from the current directory. Searches
-  upwards to 5 levels. If the full relative path from a parent of the
-  current directory isn't provided, the file won't be found.
+  Finds the relative path to C<FILE> from the current directory.
+  Searches upwards to 5 levels. If the full relative path from a parent
+  of the current directory isn't provided, the file won't be found.
 
 =cut
 
