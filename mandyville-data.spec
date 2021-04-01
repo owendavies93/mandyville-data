@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.1
-Release:    6%{?dist}
+Release:    7%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -67,6 +67,9 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Thu Apr 01 2021 Owen Davies <owen@odavi.es> - 0.0.1-7
+- Add update-understat-info
+
 * Wed Mar 31 2021 Owen Davies <owen@odavi.es> - 0.0.1-6
 - Correctly redirect cron output; don't overwrite log files
 
