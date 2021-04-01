@@ -138,7 +138,8 @@ use Mandyville::Players;
 
 ######
 # TEST update_fixture_info, find_understat_id,
-#      get_with_missing_understat_ids, update_understat_fixture_info
+#      get_with_missing_understat_ids, update_understat_fixture_info,
+#      get_without_understat_data
 ######
 
 {
@@ -270,6 +271,14 @@ use Mandyville::Players;
 
     cmp_ok( scalar @$with_comp_id, '==', scalar @$ids,
             'find_understat_id: matches with competition IDs' );
+
+    my $without_data = $players->get_without_understat_data;
+
+    cmp_ok( scalar @$without_data, '==', 1,
+            'get_without_understat_data: returns players with IDs' );
+
+    cmp_ok( $result->{id}, '==', $without_data->[0]->{understat_id},
+            'get_without_understat_data: correct understat ID returned' );
 
     my $understat_data = {
         a_goals => "2",

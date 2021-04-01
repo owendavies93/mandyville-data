@@ -370,6 +370,57 @@ sub get_with_missing_understat_ids($self, $comp_ids=[]) {
     return $ids;
 }
 
+=item get_without_understat_data
+
+  Fetches all players that have an understat ID but have no understat
+  data. Excludes any non-unique understat IDs, since we don't want to
+  mistakenly assign data to the wrong player.
+
+  Returns an arrayref of hashrefs, containing the C<id> and
+  C<understat_id> attributes.
+
+=cut
+
+sub get_without_understat_data($self) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'understat_id',
+        -from    => 'players',
+        -group_by => 'understat_id',
+        -having   => {
+            'COUNT(understat_id)' => { '>' => 1 }
+        }
+    );
+
+    my $ids = $self->dbh->selectcol_arrayref($stmt, undef, @bind);
+
+    my $where = {
+        understat_id => { '!=' => undef },
+    };
+
+    if (scalar @$ids > 0) {
+        $where = $self->sqla->merge_conditions($where, {
+            understat_id => { -not_in => $ids }
+        });
+    }
+
+    ($stmt, @bind) = $self->sqla->select(
+        -columns  => [qw(p.id p.understat_id MAX(goals)|goals)],
+        -from     => [ -join => qw(
+            players|p <=>{p.id=pf.player_id} players_fixtures|pf
+        )],
+        -where    => $where,
+        -group_by => 'p.id',
+    );
+
+    my $outer = "SELECT * FROM ($stmt) i WHERE goals IS NULL";
+
+    my $results = $self->dbh->selectall_arrayref(
+        $outer, { Slice => {} }, @bind
+    );
+
+    return $results;
+}
+
 =item update_fixture_info ( FIXTURE_DATA )
 
   Process the player data for a fixture, inserting player data where
