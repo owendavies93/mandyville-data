@@ -106,7 +106,7 @@ sub player($self, $id) {
             sleep($time);
 
             delete $self->cache->{$path};
-            $response = $self->_get($path);
+            $response = $self->get($path);
         } else {
             die "Unknown error from API: $response->{message}";
         }
