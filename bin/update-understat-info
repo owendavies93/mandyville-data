@@ -1,0 +1,93 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict;
+
+use Mandyville::Competitions;
+use Mandyville::Countries;
+use Mandyville::Database;
+use Mandyville::Players;
+use Mandyville::Fixtures;
+use Mandyville::Teams;
+use Mandyville::Utils qw(debug msg);
+
+use Const::Fast;
+use SQL::Abstract::More;
+
+const my $COMPS => [190, 201, 210, 225, 259, 269];
+
+my $db   = Mandyville::Database->new;
+my $sqla = SQL::Abstract::More->new;
+
+my $fapi = Mandyville::API::FootballData->new;
+my $uapi = Mandyville::API::Understat->new;
+
+my $countries = Mandyville::Countries->new({
+    dbh  => $db->rw_db_handle(),
+    sqla => $sqla,
+});
+
+my $comps = Mandyville::Competitions->new({
+    api       => $fapi,
+    countries => $countries,
+    dbh       => $db->rw_db_handle(),
+    sqla      => $sqla,
+});
+
+my $teams = Mandyville::Teams->new({
+    dbh  => $db->rw_db_handle(),
+    sqla => $sqla,
+});
+
+my $fixtures = Mandyville::Fixtures->new({
+    dbh   => $db->rw_db_handle(),
+    sqla  => $sqla,
+    teams => $teams,
+});
+
+my $players = Mandyville::Players->new({
+    fapi      => $fapi,
+    uapi      => $uapi,
+    comps     => $comps,
+    countries => $countries,
+    fixtures  => $fixtures,
+    dbh       => $db->rw_db_handle(),
+    sqla      => $sqla,
+});
+
+my $missing_players = $players->get_without_understat_data;
+
+msg scalar @$missing_players . ' players to fetch';
+
+foreach my $player (@$missing_players) {
+    my $id = $player->{id};
+
+    msg "Fetching for player #$id";
+
+    my $match_data = $uapi->player($player->{understat_id});
+
+    foreach my $match_info (@$match_data) {
+        my $fixture_id =
+            $fixtures->find_fixture_from_understat_data($match_info, $COMPS);
+
+        next if !defined $fixture_id;
+
+        my $team_id = $players->get_team_for_player_fixture($id, $fixture_id);
+
+        $players->update_understat_fixture_info(
+            $id, $fixture_id, $team_id, $match_info);
+    }
+}
+
+msg "Done";
+
+=head1 NAME
+
+  update-understat-info
+
+=head1 DESCRIPTION
+
+  Fetches the understat match info for all players with known understat
+  IDs and no understat match data, and stores it.
+
+=cut
+
