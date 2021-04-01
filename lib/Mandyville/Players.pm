@@ -370,18 +370,20 @@ sub get_with_missing_understat_ids($self, $comp_ids=[]) {
     return $ids;
 }
 
-=item get_without_understat_data
+=item get_without_understat_data ( SEASON, COMP_IDS )
 
   Fetches all players that have an understat ID but have no understat
   data. Excludes any non-unique understat IDs, since we don't want to
-  mistakenly assign data to the wrong player.
+  mistakenly assign data to the wrong player. Only fetches for the
+  given C<SEASON> and C<COMP_IDS> (which should be an arrayref of
+  competition IDs).
 
   Returns an arrayref of hashrefs, containing the C<id> and
   C<understat_id> attributes.
 
 =cut
 
-sub get_without_understat_data($self) {
+sub get_without_understat_data($self, $season, $comp_ids) {
     my ($stmt, @bind) = $self->sqla->select(
         -columns => 'understat_id',
         -from    => 'players',
@@ -394,28 +396,29 @@ sub get_without_understat_data($self) {
     my $ids = $self->dbh->selectcol_arrayref($stmt, undef, @bind);
 
     my $where = {
-        understat_id => { '!=' => undef },
+        'f.competition_id' => { -in => $comp_ids },
+        'f.season'         => $season,
+        'p.understat_id'   => { '!=' => undef },
+        'pf.goals'         => undef,
     };
 
     if (scalar @$ids > 0) {
         $where = $self->sqla->merge_conditions($where, {
-            understat_id => { -not_in => $ids }
+            'p.understat_id' => { -not_in => $ids }
         });
     }
 
     ($stmt, @bind) = $self->sqla->select(
-        -columns  => [qw(p.id p.understat_id MAX(goals)|goals)],
+        -columns  => [-distinct => qw/p.id p.understat_id/],
         -from     => [ -join => qw(
-            players|p <=>{p.id=pf.player_id} players_fixtures|pf
+            players|p <=>{p.id=pf.player_id}  players_fixtures|pf
+                      <=>{pf.fixture_id=f.id} fixtures|f
         )],
         -where    => $where,
-        -group_by => 'p.id',
     );
 
-    my $outer = "SELECT * FROM ($stmt) i WHERE goals IS NULL";
-
     my $results = $self->dbh->selectall_arrayref(
-        $outer, { Slice => {} }, @bind
+        $stmt, { Slice => {} }, @bind
     );
 
     return $results;

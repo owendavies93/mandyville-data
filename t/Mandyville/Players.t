@@ -272,7 +272,10 @@ use Mandyville::Players;
     cmp_ok( scalar @$with_comp_id, '==', scalar @$ids,
             'find_understat_id: matches with competition IDs' );
 
-    my $without_data = $players->get_without_understat_data;
+    dies_ok { $players->get_without_understat_data }
+              'get_without_understat_data: dies without args';
+
+    my $without_data = $players->get_without_understat_data(2018, [$comp_id]);
 
     cmp_ok( scalar @$without_data, '==', 1,
             'get_without_understat_data: returns players with IDs' );
