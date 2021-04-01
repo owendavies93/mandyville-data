@@ -54,6 +54,7 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 # Crons
 %{_sysconfdir}/cron.d/update-competition-data
 %{_sysconfdir}/cron.d/update-fixture-data
+%{_sysconfdir}/cron.d/update-understat-info
 
 # Libraries
 %{perl_vendorlib}/Mandyville/*.pm

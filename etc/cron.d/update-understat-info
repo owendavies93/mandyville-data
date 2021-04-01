@@ -1,0 +1,1 @@
+1 1 * * * mandyville /usr/bin/update-understat-info 2>&1 | ts '[\%Y-\%m-\%d \%H:\%M:\%S]' >> /var/log/mandyville/update-understat-info.log && send-healthcheck --name update-understat-info
