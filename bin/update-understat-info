@@ -8,7 +8,7 @@ use Mandyville::Database;
 use Mandyville::Players;
 use Mandyville::Fixtures;
 use Mandyville::Teams;
-use Mandyville::Utils qw(debug msg);
+use Mandyville::Utils qw(current_season debug msg);
 
 use Const::Fast;
 use SQL::Abstract::More;
@@ -54,7 +54,8 @@ my $players = Mandyville::Players->new({
     sqla      => $sqla,
 });
 
-my $missing_players = $players->get_without_understat_data;
+my $missing_players =
+    $players->get_without_understat_data(current_season(), $COMPS);
 
 msg scalar @$missing_players . ' players to fetch';
 
