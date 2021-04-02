@@ -710,6 +710,23 @@ sub _search_understat_and_store($self, $string, $id, $teams) {
     return;
 }
 
+sub _update_name($self, $id, $fd_id) {
+    my $player_info = $self->_sanitise_name($self->fapi->player($fd_id));
+
+    my ($stmt, @bind) = $self->sqla->update(
+        -table => 'players',
+        -set   => {
+            first_name => $player_info->{firstName},
+            last_name  => $player_info->{lastName},
+        },
+        -where => {
+            id => $id,
+        }
+    );
+
+    return $self->dbh->do($stmt, undef, @bind);
+}
+
 =back
 
 =cut

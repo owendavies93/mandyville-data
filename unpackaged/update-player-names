@@ -1,0 +1,44 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict;
+
+use Mandyville::API::FootballData;
+use Mandyville::Database;
+use Mandyville::Players;
+use Mandyville::Utils qw(msg);
+
+use SQL::Abstract::More;
+
+my $dbh = Mandyville::Database->new;
+my $sqla = SQL::Abstract::More->new;
+
+my ($stmt, @bind) = $sqla->select('players', [qw(id football_data_id)]);
+
+my $result = $dbh->rw_db_handle()->selectall_arrayref(
+    $stmt, { Slice => {} }, @bind
+);
+
+my $players = Mandyville::Players->new({
+    dbh  => $dbh->rw_db_handle(),
+    fapi => Mandyville::API::FootballData->new,
+    sqla => $sqla,
+});
+
+msg scalar @$result . ' players to update';
+
+foreach my $p (@$result) {
+    msg 'Updating #' . $p->{id};
+    $players->_update_name($p->{id}, $p->{football_data_id});
+}
+
+=head1 NAME
+
+  update-player-names
+
+=head1 DESCRIPTION
+
+  Run through all known players in the database and update their names.
+  Designed to be run on an ad hoc basis.
+
+=cut
+
