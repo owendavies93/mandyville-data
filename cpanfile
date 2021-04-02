@@ -6,6 +6,7 @@ requires 'Array::Utils';
 requires 'Capture::Tiny';
 requires 'Const::Fast';
 requires 'Cpanel::JSON::XS';
+requires 'DateTime';
 requires 'Dir::Self';
 requires 'DBD::Pg';
 requires 'DBI';

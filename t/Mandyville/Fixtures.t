@@ -174,6 +174,9 @@ use Mandyville::Fixtures;
     cmp_ok( $data->{season}, '==', '2017',
             'process_fixture_data: correct season returned' );
 
+    cmp_ok( $data->{fixture_date}, 'eq', '2018-05-26',
+            'process_fixture_data: correct fixture date' );
+
     delete $fixture_info->{score}->{fullTime};
 
     throws_ok { $fixtures->process_fixture_data($fixture_info) }
