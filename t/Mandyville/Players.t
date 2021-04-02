@@ -394,6 +394,21 @@ use Mandyville::Players;
 
     cmp_ok( $info->{lastName}, 'eq', 'Carvajal',
             '_sanitise_name: correct last name' );
+
+    $info = {
+        name        => 'Hakim El Mokeddem',
+        firstName   => 'Hakim',
+        lastName    => undef,
+        nationality => 'France',
+    };
+
+    $info = $players->_sanitise_name($info);
+
+    cmp_ok( $info->{firstName}, 'eq', 'Hakim',
+            '_sanitise_name: correct first name' );
+
+    cmp_ok( $info->{lastName}, 'eq', 'El Mokeddem',
+            '_sanitise_name: correct last name' );
 }
 
 done_testing();

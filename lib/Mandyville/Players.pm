@@ -638,7 +638,7 @@ sub _sanitise_name($self, $player_info) {
     return $player_info if defined $first && defined $last;
 
     if ($full =~ /\s/) {
-        ($first, $last) = split /\s/, $full;
+        ($first, $last) = $full =~ /(\w+)\s+(.+)$/;
     } elsif (!defined $last) {
         $last = '';
     } elsif (!defined $first) {
