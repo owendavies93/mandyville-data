@@ -5,9 +5,10 @@ use Mojo::Base -strict;
 use Mandyville::API::FootballData;
 use Mandyville::Database;
 use Mandyville::Players;
-use Mandyville::Utils qw(msg);
+use Mandyville::Utils qw(debug msg);
 
 use SQL::Abstract::More;
+use Try::Tiny;
 
 my $dbh = Mandyville::Database->new;
 my $sqla = SQL::Abstract::More->new;
@@ -28,7 +29,11 @@ msg scalar @$result . ' players to update';
 
 foreach my $p (@$result) {
     msg 'Updating #' . $p->{id};
-    $players->_update_name($p->{id}, $p->{football_data_id});
+    try {
+        $players->_update_name($p->{id}, $p->{football_data_id});
+    } catch {
+        debug 'Update failed, skipping #' . $p->{id};
+    };
 }
 
 =head1 NAME
