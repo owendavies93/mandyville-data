@@ -1,0 +1,119 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict;
+
+use Mandyville::API::FootballData;
+use Mandyville::Competitions;
+use Mandyville::Countries;
+use Mandyville::Database;
+use Mandyville::Fixtures;
+use Mandyville::Teams;
+use Mandyville::Utils qw(debug msg);
+
+use Const::Fast;
+use SQL::Abstract::More;
+use Try::Tiny;
+
+const my @SEASONS => (2018, 2019, 2020);
+
+my $db   = Mandyville::Database->new;
+my $dbh  = $db->rw_db_handle();
+my $sqla = SQL::Abstract::More->new;
+
+my $api = Mandyville::API::FootballData->new;
+
+my $countries = Mandyville::Countries->new({
+    dbh  => $db->rw_db_handle(),
+    sqla => $sqla,
+});
+
+my $comps = Mandyville::Competitions->new({
+    api       => $api,
+    countries => $countries,
+    dbh       => $db->rw_db_handle(),
+    sqla      => $sqla,
+});
+
+my $teams = Mandyville::Teams->new({
+    dbh  => $db->rw_db_handle(),
+    sqla => $sqla,
+});
+
+my $fixtures = Mandyville::Fixtures->new({
+    comps => $comps,
+    dbh   => $db->rw_db_handle(),
+    sqla  => $sqla,
+    teams => $teams,
+});
+
+my $valid_comps = $comps->get_by_plan(1);
+
+foreach my $season (@SEASONS) {
+    msg "Processing $season";
+
+    foreach my $comp (@$valid_comps) {
+        try {
+            my $fdi  = $comp->{football_data_id};
+            my $name = $comp->{name};
+
+            msg "Procesing $name";
+
+            my $season_data = $api->competition_season_matches($fdi, $season);
+            my $matches = $season_data->{matches};
+
+            foreach my $match_info (@$matches) {
+                $match_info->{competition} = {
+                    id   => $fdi,
+                    name => $name,
+                };
+
+                try {
+                    my $fixture_data =
+                        $fixtures->process_fixture_data($match_info);
+                    my $id = $fixture_data->{id};
+                    my $date = $fixture_data->{fixture_date};
+
+                    my ($stmt, @bind) = $sqla->update(
+                        -table => 'fixtures',
+                        -set   => {
+                            fixture_date => $date,
+                        },
+                        -where => {
+                            id => $id,
+                        }
+                    );
+                    $dbh->do($stmt, undef, @bind);
+                } catch {
+                    if (/Missing match result data/) {
+                        debug "Skipping fixture with missing data";
+                    } elsif (/missing .* attribute in player_info/) {
+                        debug "Skipping player with missing data";
+                    } else {
+                        die "$_";
+                    }
+                };
+            }
+
+            msg "Finished processing $name";
+        } catch {
+            if (/Not found/) {
+                debug "Season data not found, skipping";
+            } elsif (/Restricted/) {
+                debug "Season data not on this plan, skipping";
+            } else {
+                die "$_";
+            }
+        };
+    }
+}
+
+=head1 NAME
+
+  add-fixture-dates
+
+=head1 DESCRIPTION
+
+  Backpopulate fixture dates for all known fixtures in the database.
+
+=cut
+
