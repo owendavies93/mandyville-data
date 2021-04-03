@@ -19,10 +19,10 @@ use Time::HiRes qw(time sleep);
 
 =head1 DESCRIPTION
 
-  This module provides methods for fetching and parsing information from the
-  football-data.org API. It does a lot of caching to avoid hitting the API
-  too regularly. Kudos to Daniel from football-data.org for providing such
-  a rich source of data for no cost!
+  This module provides methods for fetching and parsing information
+  from the football-data.org API. It does a lot of caching to avoid
+  hitting the API too regularly. Kudos to Daniel from football-data.org
+  for providing such a rich source of data for no cost!
 
 =cut
 
