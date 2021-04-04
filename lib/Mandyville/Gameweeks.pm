@@ -5,7 +5,10 @@ use Mojo::Base -base, -signatures;
 use Mandyville::Database;
 use Mandyville::Utils qw(current_season);
 
+use Const::Fast;
 use SQL::Abstract::More;
+
+const my $NO_OF_GWS => 38;
 
 =head1 NAME
 
@@ -81,6 +84,76 @@ sub new($class, $options) {
     return $self;
 }
 
+=item add_fixture_gameweeks
+
+  Adds or updates gameweek information for all eligible fixtures in the
+  database - that is, any Premier League fixtures which are in the
+  current season. Uses the deadline times of the gameweeks to work out
+  which gameweek the fixture falls into.
+
+=cut
+
+sub add_fixture_gameweeks($self) {
+    my $season = current_season();
+    my $gws = $self->_get_gameweeks_for_season($season);
+
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => [qw(f.id f.fixture_date)],
+        -from    => [-join => qw(
+            fixtures|f <=>{f.competition_id=c.id} competitions|c
+                       <=>{c.country_id=co.id}    countries|co
+        )],
+        -where   => {
+            'f.season' => $season,
+            'co.name'  => 'England',
+            'c.name'   => 'Premier League',
+        }
+    );
+
+    my $fixtures =
+        $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+
+    my $updated = 0;
+    foreach my $f (@$fixtures) {
+        my $gw =
+            $self->_find_gameweek_from_fixture_date($f->{fixture_date}, $gws);
+
+        ($stmt, @bind) = $self->sqla->select(
+            -columns => 'id',
+            -from    => 'fixtures_fpl_gameweeks',
+            -where   => {
+                fixture_id => $f->{id}
+            }
+        );
+
+        my ($f_gw_id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+        if (defined $f_gw_id) {
+            ($stmt, @bind) = $self->sqla->update(
+                -table => 'fixtures_fpl_gameweeks',
+                -set   => {
+                    gameweek_id => $gw->{id},
+                },
+                -where => {
+                    id => $f_gw_id,
+                }
+            );
+        } else {
+            ($stmt, @bind) = $self->sqla->insert(
+                -into   => 'fixtures_fpl_gameweeks',
+                -values => {
+                    fixture_id  => $f->{id},
+                    gameweek_id => $gw->{id},
+                }
+            );
+        }
+
+        $updated += $self->dbh->do($stmt, undef, @bind);
+    }
+
+    return $updated;
+}
+
 =item process_gameweeks
 
   Fetch the gameweek data for the current season from the FPL API, and
@@ -151,6 +224,31 @@ sub process_gameweeks($self) {
 =back
 
 =cut
+
+sub _find_gameweek_from_fixture_date($self, $fixture_date, $gw_info) {
+    for (my $i = 1; $i < $NO_OF_GWS; $i++) {
+        my $gw = $gw_info->[$i];
+        my ($gw_date) = $gw->{deadline} =~ /^([\w-]+)\s/;
+
+        if ($fixture_date lt $gw_date) {
+            return $gw_info->[$i - 1];
+        }
+    }
+    return $gw_info->[$NO_OF_GWS - 1];
+}
+
+sub _get_gameweeks_for_season($self, $season) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => [qw(id gameweek deadline)],
+        -from    => 'fpl_gameweeks',
+        -where   => {
+            season => $season,
+        }
+    );
+
+    my $gws = $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+    return $gws;
+}
 
 1;
 
