@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.1
-Release:    7%{?dist}
+Release:    8%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -67,6 +67,10 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Sun Apr 04 2021 Owen Davies <owen@odavi.es> - 0.0.1-8
+- Fetch and store fixture data
+- Add gameweek processing
+
 * Thu Apr 01 2021 Owen Davies <owen@odavi.es> - 0.0.1-7
 - Add update-understat-info
 
