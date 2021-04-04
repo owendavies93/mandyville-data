@@ -2,10 +2,12 @@
 
 use Mojo::Base -strict;
 
+use Mandyville::API::FPL;
 use Mandyville::API::FootballData;
 use Mandyville::Competitions;
 use Mandyville::Countries;
 use Mandyville::Database;
+use Mandyville::Gameweeks;
 use Mandyville::Players;
 use Mandyville::Fixtures;
 use Mandyville::Teams;
@@ -67,6 +69,14 @@ my $players = Mandyville::Players->new({
     sqla      => $sqla,
 });
 
+my $fpl_api = Mandyville::API::FPL->new;
+
+my $gameweeks = Mandyville::Gameweeks->new({
+    api  => $fpl_api,
+    dbh  => $db->rw_db_handle(),
+    sqla => $sqla,
+});
+
 my $valid_comps = $comps->get_by_plan(1);
 
 foreach my $comp (@$valid_comps) {
@@ -110,6 +120,16 @@ foreach my $comp (@$valid_comps) {
     };
 }
 
+msg "Fetching gameweeks";
+
+$gameweeks->process_gameweeks;
+
+msg "Assigning gameweeks to fixtures";
+
+$gameweeks->add_fixture_gameweeks;
+
+msg "Done!";
+
 =head1 NAME
 
   update-fixture-data [ --season|-s SEASON ]
@@ -124,6 +144,10 @@ foreach my $comp (@$valid_comps) {
   by the football-data API. See football-data.org/coverage for details
   of those competitions. Also, not all seasons are available for all
   competitions - the script will say when this is the case.
+
+  After updating the fixture data, fetches and updates the gameweek
+  data from the FPL API, stores it, and assigns fixtures for the
+  current season to a gameweek.
 
 =head1 OPTIONS
 
