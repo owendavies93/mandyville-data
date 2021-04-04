@@ -1,0 +1,43 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict;
+
+use Mandyville::API::FPL;
+use Mandyville::Database;
+use Mandyville::Gameweeks;
+use Mandyville::Utils qw(msg);
+
+use SQL::Abstract::More;
+
+my $api = Mandyville::API::FPL->new;
+my $db = Mandyville::Database->new;
+
+my $gameweeks = Mandyville::Gameweeks->new({
+    api  => $api,
+    dbh  => $db->rw_db_handle(),
+    sqla => SQL::Abstract::More->new,
+});
+
+msg "Fetching gameweeks";
+
+$gameweeks->process_gameweeks;
+
+msg "Assigning gameweeks to fixtures";
+
+$gameweeks->add_fixture_gameweeks;
+
+msg "Done!";
+
+=head1 NAME
+
+  update-gameweek-info
+
+=head1 DESCRIPTION
+
+  Fetches the gameweek information from the FPL API, stores it, and
+  assigns fixtures for the current season to a gameweek.
+
+=back
+
+=cut
+
