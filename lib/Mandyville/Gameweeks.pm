@@ -99,6 +99,17 @@ sub process_gameweeks($self) {
         my $gw_number = $gw->{id};
         my $deadline  = $gw->{deadline_time};
 
+        # Sanity check the first gameweek deadline to ensure we're
+        # processing the correct season, given that we've made
+        # assumptions about the current season.
+        if ($gw_number == 1) {
+            my ($deadline_year) = $deadline =~ /^(\d{4})/;
+            if ($deadline_year != $season) {
+                die 'Deadline for first gameweek doesn\'t match season! ' .
+                    'Has the next season started?';
+            }
+        }
+
         my ($stmt, @bind) = $self->sqla->select(
             -columns => 'id',
             -from    => 'fpl_gameweeks',

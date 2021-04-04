@@ -7,6 +7,7 @@ use Mandyville::Utils qw(find_file);
 
 use Mojo::File;
 use Mojo::JSON qw(decode_json);
+use Test::Exception;
 use Test::MockObject::Extends;
 use Test::MockTime qw(set_absolute_time);
 use Test::More;
@@ -25,7 +26,7 @@ use Mandyville::Gameweeks;
 ######
 
 {
-    set_absolute_time('2020-01-01T00:00:00Z');
+    set_absolute_time('2021-01-01T00:00:00Z');
 
     my $mock_api = Test::MockObject::Extends->new(
         'Mandyville::API::FPL'
@@ -51,6 +52,15 @@ use Mandyville::Gameweeks;
 
     cmp_ok( $processed, '==', $processed_again,
             'process_gameweeks: all records updated' );
+
+    $mock_api->mock( 'gameweeks', sub {
+        my $data = decode_json($json)->{events};
+        $data->[0]->{deadline_time} = '2021-09-12T10:00:00Z';
+        return $data;
+    });
+
+    throws_ok { $gameweeks->process_gameweeks } qr/Deadline for first/,
+                'process_gameweeks: dies on season mismatch';
 }
 
 done_testing();
