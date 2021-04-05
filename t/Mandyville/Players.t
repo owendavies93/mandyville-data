@@ -329,6 +329,95 @@ use Mandyville::Players;
 }
 
 ######
+# TEST find_player_by_fpl_info and update_fpl_id
+######
+
+{
+    my $db = Mandyville::Database->new;
+    my $countries = Mandyville::Countries->new({
+        dbh => $db->rw_db_handle(),
+    });
+    my $comp = Mandyville::Competitions->new({
+        countries => $countries,
+        dbh       => $db->rw_db_handle(),
+    });
+
+    my $country_id = $countries->get_country_id('England');
+    my $comp_id = $comp->get_or_insert(
+        'Premier League', $country_id, 2021, 1
+    )->{id};
+
+    my $teams = Mandyville::Teams->new({
+        dbh => $db->rw_db_handle(),
+    });
+
+    my $fixtures = Mandyville::Fixtures->new({
+        comps => $comp,
+        dbh   => $db->rw_db_handle(),
+        teams => $teams,
+    });
+
+    my $mock_api = Test::MockObject::Extends->new(
+        'Mandyville::API::FootballData'
+    );
+
+    $mock_api->mock( 'player', sub {
+        my ($self, $id) = @_;
+        _mock_player_api($id);
+    } );
+
+    my $players = Mandyville::Players->new({
+        fapi => $mock_api,
+        dbh  => $db->rw_db_handle(),
+    });
+
+    my $fixture_info = _load_test_json("pl-match.json");
+
+    $players->update_fixture_info($fixture_info);
+
+    my $fpl_id = 1;
+    my $fpl_info = {
+        id          => $fpl_id,
+        first_name  => 'Benjamin',
+        second_name => 'Mendy',
+        web_name    => 'Mendy',
+    };
+
+    my $info = $players->find_player_by_fpl_info($fpl_info);
+
+    cmp_ok( $players->update_fpl_id($info->{id}, $fpl_id), '==', 1,
+            'update_fpl_id: updates succesfully');
+
+    cmp_ok( $info->{first_name}, 'eq', $fpl_info->{first_name},
+            'find_player_by_fpl_info: simple match returns correct name' );
+
+    $fpl_info = {
+        first_name  => 'Gabriel Fernando',
+        second_name => 'de Jesus',
+        web_name    => 'Jesus',
+    };
+
+    $info = $players->find_player_by_fpl_info($fpl_info);
+
+    cmp_ok( $info->{first_name}, 'eq', 'Gabriel',
+            'find_player_by_fpl_info: match on webname and first first name' );
+
+    $fpl_info = {
+        first_name  => 'Test',
+        second_name => 'Test',
+        web_name    => 'Testing Testing',
+    };
+
+    throws_ok { $players->find_player_by_fpl_info($fpl_info) } qr/No match/,
+                'find_player_by_fpl_info: dies on no match';
+
+    $fpl_info->{web_name} = 'Test';
+
+    throws_ok { $players->find_player_by_fpl_info($fpl_info) } qr/No match/,
+                'find_player_by_fpl_info: dies on no match';
+}
+
+######
 # TEST _sanitise_name
 ######
 
@@ -438,6 +527,34 @@ sub _mock_player_api($id) {
             firstName   => 'Adam',
             lastName    => 'Lallana',
             nationality => 'England',
+        };
+    } elsif ($id == 7882) {
+        return {
+            name        => 'Benjamin Mendy',
+            firstName   => 'Benjamin',
+            lastName    => undef,
+            nationality => 'France',
+        };
+    } elsif ($id == 3236) {
+        return {
+            name        => 'Gabriel Jesus',
+            firstName   => 'Gabriel Fernando',
+            lastName    => undef,
+            nationality => 'Brazil',
+        };
+    } elsif ($id == 124826) {
+        return {
+            name        => 'Vontae Daley Campbell',
+            firstName   => 'Vontae',
+            lastName    => undef,
+            nationality => 'England',
+        };
+    } elsif ($id == 3222) {
+        return {
+            name        => 'Ederson',
+            firstName   => 'Ederson',
+            lastName    => undef,
+            nationality => 'Brazil',
         };
     } else {
         die "Unknown player ID $id";

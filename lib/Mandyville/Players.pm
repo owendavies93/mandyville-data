@@ -170,6 +170,89 @@ sub new($class, $options) {
     return $self;
 }
 
+=item find_player_by_fpl_info ( FPL_INFO )
+
+  Attempt to find a player in the mandyville database based on their
+  info in the FPL API. Takes the following steps:
+
+  * Check first name and last name for exact matches
+  * Check 'web name' (usually surname but sometimes common name) for an
+    exact match with surname and a match (partial or exact) with first
+    name)
+  * Check split of 'web name' against first name and last name
+
+  Only matches on players that played a Premier League game at some
+  point in the database (not limited to the current season).
+
+=cut
+
+sub find_player_by_fpl_info($self, $fpl_info) {
+    my %query = (
+        -columns  => [qw(p.id p.first_name p.last_name)],
+        -from     => [-join => qw(
+            players|p <=>{p.id=pf.player_id}     players_fixtures|pf
+                      <=>{pf.fixture_id=f.id}    fixtures|f
+                      <=>{f.competition_id=c.id} competitions|c
+                      <=>{c.country_id=co.id}    countries|co
+        )],
+        -where    => {
+            'c.name'       => 'Premier League',
+            'co.name'      => 'England',
+            'p.first_name' => $fpl_info->{first_name},
+            'p.last_name'  => $fpl_info->{second_name},
+        },
+        -group_by => 'p.id',
+    );
+
+    my ($stmt, @bind) = $self->sqla->select(%query);
+
+    my $matches =
+        $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+
+    if (scalar @$matches == 1) {
+        return $matches->[0];
+    } elsif (scalar @$matches > 1) {
+        die 'Multiple matches, bailing out';
+    }
+
+    my ($first_first_name) = $fpl_info->{first_name} =~ /^(\w+)\s/;
+
+    $query{'-where'}->{'p.last_name'}  = $fpl_info->{web_name};
+    $query{'-where'}->{'p.first_name'} = $first_first_name;
+
+    ($stmt, @bind) = $self->sqla->select(%query);
+
+    $matches = $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+
+    if (scalar @$matches == 1) {
+        return $matches->[0];
+    } elsif (scalar @$matches > 1) {
+        die 'Multiple matches, bailing out';
+    }
+
+    if ($fpl_info->{web_name} =~ /\s/) {
+        my ($first, $last) = $fpl_info->{web_name} =~ /(\w+)\s+(.+)$/;
+
+        $query{'-where'}->{'p.first_name'} = $first;
+        $query{'-where'}->{'p.last_name'}  = $last;
+
+        ($stmt, @bind) = $self->sqla->select(%query);
+
+        $matches =
+            $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+
+        if (scalar @$matches == 1) {
+            return $matches->[0];
+        } elsif (scalar @$matches > 1) {
+            die 'Multiple matches, bailing out';
+        } else {
+            die 'No match found';
+        }
+    } else {
+        die 'No match found';
+    }
+}
+
 =item find_understat_id ( ID )
 
   Attempt to find the understat ID for the player with the given
@@ -447,6 +530,27 @@ sub update_fixture_info($self, $fixture_data) {
     my $away_id = $fixture_info->{away_team_id};
     return $self->_process_team_info(
         $fixture_id, $away_id, $fixture_data, $fixture_data->{awayTeam});
+}
+
+=item update_fpl_id ( PLAYER_ID, FPL_ID )
+
+  Update the FPL entity ID for the player corresponding to C<PLAYER_ID>
+  to C<FPL_ID>.
+
+=cut
+
+sub update_fpl_id($self, $player_id, $fpl_id) {
+    my ($stmt, @bind) = $self->sqla->update(
+        -table => 'players',
+        -set   => {
+            fpl_id => $fpl_id,
+        },
+        -where => {
+            id => $player_id,
+        }
+    );
+
+    return $self->dbh->do($stmt, undef, @bind);
 }
 
 =item update_understat_fixture_info ( PLAYER_ID, FIXTURE_ID, TEAM_ID, UNDERSTAT_INFO )
