@@ -38,5 +38,24 @@ use Mandyville::API::FPL;
     cmp_ok( scalar @$gameweeks, '==', 38, 'gameweeks: correct gameweeks' );
 }
 
+######
+# TEST players
+######
+
+{
+    my $api = Mandyville::API::FPL->new;
+    my $json = Mojo::File->new(find_file('t/data/elements.json'))->slurp;
+    my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
+    $mock_ua->mock( 'get', sub {
+        return $api->_get_tx(decode_json($json));
+    });
+
+    $api->ua($mock_ua);
+
+    my $players = $api->players;
+
+    cmp_ok( scalar @$players, '==', 2, 'players, correct players' );
+}
+
 done_testing();
 

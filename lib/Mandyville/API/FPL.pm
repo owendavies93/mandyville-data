@@ -37,6 +37,17 @@ sub gameweeks($self) {
     return $bootstrap->{events};
 }
 
+=item players
+
+  Fetch the players in the game for the current season.
+
+=cut
+
+sub players($self) {
+    my $bootstrap = $self->get('bootstrap-static/');
+    return $bootstrap->{elements};
+}
+
 =back
 
 =cut
