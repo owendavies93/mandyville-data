@@ -1,0 +1,94 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict;
+
+use Mandyville::API::FPL;
+use Mandyville::API::FootballData;
+use Mandyville::Competitions;
+use Mandyville::Countries;
+use Mandyville::Database;
+use Mandyville::Players;
+use Mandyville::Fixtures;
+use Mandyville::Teams;
+use Mandyville::Utils qw(debug msg);
+
+use SQL::Abstract::More;
+use Try::Tiny;
+
+binmode(STDOUT, ':encoding(UTF-8)');
+binmode(STDERR, ':encoding(UTF-8)');
+
+my $db   = Mandyville::Database->new;
+my $sqla = SQL::Abstract::More->new;
+
+my $api = Mandyville::API::FootballData->new;
+
+my $countries = Mandyville::Countries->new({
+    dbh  => $db->rw_db_handle(),
+    sqla => $sqla,
+});
+
+my $comps = Mandyville::Competitions->new({
+    api       => $api,
+    countries => $countries,
+    dbh       => $db->rw_db_handle(),
+    sqla      => $sqla,
+});
+
+my $teams = Mandyville::Teams->new({
+    dbh  => $db->rw_db_handle(),
+    sqla => $sqla,
+});
+
+my $fixtures = Mandyville::Fixtures->new({
+    dbh   => $db->rw_db_handle(),
+    sqla  => $sqla,
+    teams => $teams,
+});
+
+my $players = Mandyville::Players->new({
+    fapi      => $api,
+    comps     => $comps,
+    countries => $countries,
+    fixtures  => $fixtures,
+    dbh       => $db->rw_db_handle(),
+    sqla      => $sqla,
+});
+
+my $fpl_api = Mandyville::API::FPL->new;
+
+my $player_data = $fpl_api->players;
+
+foreach my $player (@$player_data) {
+    my $first = $player->{first_name};
+    my $last  = $player->{second_name};
+
+    try {
+        msg "Processing $first $last";
+        my $db_result = $players->find_player_by_fpl_info($player);
+        $players->update_fpl_id($db_result->{id}, $player->{id});
+    } catch {
+        if (/Multiple matches/) {
+            debug "Multiple matches found for $first $last";
+        } elsif (/No match found/) {
+            debug "No match found for $first $last";
+        } else {
+            die "$_";
+        }
+    };
+}
+
+msg "Done!";
+
+=head1 NAME
+
+  update-fpl-ids
+
+=head1 DESCRIPTION
+
+  Attempts to find players in the mandyville database for every player
+  in the FPL game. Any players where we fail to find a matching
+  database entry will be logged to STDERR.
+
+=cut
+
