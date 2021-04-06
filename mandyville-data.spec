@@ -49,6 +49,7 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 %{_bindir}/send-healthcheck
 %{_bindir}/update-competition-data
 %{_bindir}/update-fixture-data
+%{_bindir}/update-fpl-ids
 %{_bindir}/update-understat-ids
 %{_bindir}/update-understat-info
 
