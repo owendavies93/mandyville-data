@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.1
-Release:    9%{?dist}
+Release:    10%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -12,7 +12,7 @@ Requires:   perl(Array::Utils)
 Requires:   perl(Capture::Tiny)
 Requires:   perl(Const::Fast)
 Requires:   perl(Cpanel::JSON::XS)
-Requires:   perl(Date::Time)
+Requires:   perl(DateTime)
 Requires:   perl(Dir::Self)
 Requires:   perl(DBD::Pg)
 Requires:   perl(DBI)
@@ -69,7 +69,7 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
-* Sun Apr 04 2021 Owen Davies <owen@odavi.es> - 0.0.1-9
+* Sun Apr 04 2021 Owen Davies <owen@odavi.es> - 0.0.1-10
 - Fetch and store fixture data
 - Add gameweek processing
 
