@@ -170,6 +170,59 @@ sub new($class, $options) {
     return $self;
 }
 
+=item add_fpl_season_info ( PLAYER_ID, SEASON, FPL_ID, POSITION_ID )
+
+  Add the FPL season info for the given C<PLAYER_ID>. Checks for the
+  season info before inserting. Returns the ID of the season info
+  entry.
+
+  C<FPL_ID> is the current season FPL ID, not the FPL "code".
+  C<POSITION_ID> is the entity type ID of the player (a number between
+  1 and 4).
+
+=cut
+
+sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'id',
+        -from    => 'fpl_season_info',
+        -where   => {
+            player_id => $player_id,
+            season    => $season,
+        },
+    );
+
+    my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    if (!defined $id) {
+        ($stmt, @bind) = $self->sqla->select(
+            -columns => 'id',
+            -from    => 'fpl_positions',
+            -where   => {
+                element_type_id => $position_id,
+            },
+        );
+
+        my ($fpl_position_id) =
+            $self->dbh->selectrow_array($stmt, undef, @bind);
+
+        ($stmt, @bind) = $self->sqla->insert(
+            -into      => 'fpl_season_info',
+            -values    => {
+                player_id        => $player_id,
+                season           => $season,
+                fpl_season_id    => $fpl_id,
+                fpl_positions_id => $fpl_position_id,
+            },
+            -returning => 'id',
+        );
+
+        ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    }
+
+    return $id;
+}
+
 =item find_player_by_fpl_info ( FPL_INFO )
 
   Attempt to find a player in the mandyville database based on their

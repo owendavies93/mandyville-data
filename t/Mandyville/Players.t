@@ -329,7 +329,7 @@ use Mandyville::Players;
 }
 
 ######
-# TEST find_player_by_fpl_info and update_fpl_id
+# TEST find_player_by_fpl_info, update_fpl_id, add_fpl_season_info
 ######
 
 {
@@ -429,6 +429,18 @@ use Mandyville::Players;
 
     cmp_ok( $info->{id}, '==', $player_id,
             'find_player_by_fpl_info: returns correct values after mapping' );
+
+    dies_ok { $players->add_fpl_season_info }
+              'add_fpl_season_info: dies without args';
+
+    my $info_id = $players->add_fpl_season_info($player_id, 2020, 1, 1);
+
+    ok( $info_id, 'add_fpl_season_info: correctly inserts' );
+
+    my $new_id = $players->add_fpl_season_info($player_id, 2020, 1, 1);
+
+    cmp_ok( $info_id, '==', $new_id,
+            'add_fpl_season_info: correctly returns same id' );
 }
 
 ######
