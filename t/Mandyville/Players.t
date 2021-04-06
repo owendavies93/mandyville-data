@@ -377,7 +377,7 @@ use Mandyville::Players;
 
     my $fpl_id = 1;
     my $fpl_info = {
-        id          => $fpl_id,
+        code        => $fpl_id,
         first_name  => 'Benjamin',
         second_name => 'Mendy',
         web_name    => 'Mendy',

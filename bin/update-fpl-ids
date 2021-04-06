@@ -66,7 +66,7 @@ foreach my $player (@$player_data) {
     try {
         msg "Processing $first $last";
         my $db_result = $players->find_player_by_fpl_info($player);
-        $players->update_fpl_id($db_result->{id}, $player->{id});
+        $players->update_fpl_id($db_result->{id}, $player->{code});
     } catch {
         if (/Multiple matches/) {
             debug "Multiple matches found for $first $last";
