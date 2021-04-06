@@ -415,6 +415,17 @@ use Mandyville::Players;
 
     throws_ok { $players->find_player_by_fpl_info($fpl_info) } qr/No match/,
                 'find_player_by_fpl_info: dies on no match';
+
+    my $player_id = 1;
+    $db->rw_db_handle->do(qq(
+        INSERT INTO fpl_names (player_id, name)
+        VALUES ($player_id, 'Test Test')
+    ));
+
+    $info = $players->find_player_by_fpl_info($fpl_info);
+
+    cmp_ok( $info->{id}, '==', $player_id,
+            'find_player_by_fpl_info: returns correct values after mapping' );
 }
 
 ######

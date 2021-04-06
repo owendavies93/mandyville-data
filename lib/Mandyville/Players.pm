@@ -187,6 +187,23 @@ sub new($class, $options) {
 =cut
 
 sub find_player_by_fpl_info($self, $fpl_info) {
+    my $combined_name = $fpl_info->{first_name} . ' ' .
+                        $fpl_info->{second_name};
+
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => [qw(p.id p.first_name p.last_name)],
+        -from    => [-join => qw(
+            players|p <=>{p.id=f.player_id} fpl_names|f
+        )],
+        -where   => {
+            'f.name' => $combined_name,
+        }
+    );
+
+    my ($result) = $self->dbh->selectrow_hashref($stmt, { Slice => {} }, @bind);
+
+    return $result if defined $result;
+
     my %query = (
         -columns  => [qw(p.id p.first_name p.last_name)],
         -from     => [-join => qw(
@@ -204,7 +221,7 @@ sub find_player_by_fpl_info($self, $fpl_info) {
         -group_by => 'p.id',
     );
 
-    my ($stmt, @bind) = $self->sqla->select(%query);
+    ($stmt, @bind) = $self->sqla->select(%query);
 
     my $matches =
         $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
