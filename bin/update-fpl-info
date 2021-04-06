@@ -10,7 +10,7 @@ use Mandyville::Database;
 use Mandyville::Players;
 use Mandyville::Fixtures;
 use Mandyville::Teams;
-use Mandyville::Utils qw(debug msg);
+use Mandyville::Utils qw(current_season debug msg);
 
 use SQL::Abstract::More;
 use Try::Tiny;
@@ -58,6 +58,7 @@ my $players = Mandyville::Players->new({
 my $fpl_api = Mandyville::API::FPL->new;
 
 my $player_data = $fpl_api->players;
+my $season = current_season();
 
 foreach my $player (@$player_data) {
     my $first = $player->{first_name};
@@ -67,6 +68,9 @@ foreach my $player (@$player_data) {
         msg "Processing $first $last";
         my $db_result = $players->find_player_by_fpl_info($player);
         $players->update_fpl_id($db_result->{id}, $player->{code});
+        $players->add_fpl_season_info(
+            $db_result->{id}, $season, $player->{id}, $player->{element_type}
+        );
     } catch {
         if (/Multiple matches/) {
             debug "Multiple matches found for $first $last";
