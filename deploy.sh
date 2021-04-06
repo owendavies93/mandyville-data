@@ -43,7 +43,7 @@ SOURCE_DIR="$HOME/rpmbuild/SOURCES"
 RPM_DIR="$HOME/rpmbuild/RPMS/x86_64"
 
 VERSION=$(grep Version $CWD/$PACKAGE_NAME.spec | grep -oP '\d+\.\d+')
-RELEASE=$(grep Release $CWD/$PACKAGE_NAME.spec | grep -oP '\d')
+RELEASE=$(grep Release $CWD/$PACKAGE_NAME.spec | grep -oP '\d+')
 
 PACKAGE=$PACKAGE_NAME-$VERSION-$RELEASE.$DIST
 
