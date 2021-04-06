@@ -388,6 +388,9 @@ use Mandyville::Players;
     cmp_ok( $players->update_fpl_id($info->{id}, $fpl_id), '==', 1,
             'update_fpl_id: updates succesfully');
 
+    cmp_ok( $players->update_fpl_id($info->{id}, $fpl_id), '==', 0,
+            'update_fpl_id: doesn\'t update the same player again' );
+
     cmp_ok( $info->{first_name}, 'eq', $fpl_info->{first_name},
             'find_player_by_fpl_info: simple match returns correct name' );
 

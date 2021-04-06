@@ -551,13 +551,25 @@ sub update_fixture_info($self, $fixture_data) {
 
 =item update_fpl_id ( PLAYER_ID, FPL_ID )
 
-  Update the FPL entity ID for the player corresponding to C<PLAYER_ID>
-  to C<FPL_ID>.
+  Set the FPL entity ID for the player corresponding to C<PLAYER_ID>
+  to C<FPL_ID>, if it doesn't already exist.
 
 =cut
 
 sub update_fpl_id($self, $player_id, $fpl_id) {
-    my ($stmt, @bind) = $self->sqla->update(
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'fpl_id',
+        -from    => 'players',
+        -where   => {
+            id => $player_id,
+        }
+    );
+
+    my ($result) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    return 0 if defined $result;
+
+    ($stmt, @bind) = $self->sqla->update(
         -table => 'players',
         -set   => {
             fpl_id => $fpl_id,
