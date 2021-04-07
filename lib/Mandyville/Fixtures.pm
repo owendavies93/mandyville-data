@@ -13,6 +13,7 @@ use Const::Fast;
 use DateTime;
 use List::Util qw(any);
 use Mojo::Date;
+use POSIX qw(strftime);
 use SQL::Abstract::More;
 
 const my $MIN_SEASON => 2018;
@@ -192,17 +193,25 @@ sub find_fixture_from_understat_data($self, $understat_data, $comps) {
   C<AWAY_ID> and C<SEASON>. C<COMP_ID> is the mandyville database
   competition ID, C<HOME_ID> and C<AWAY_ID> are both mandyville
   database team IDs. C<SEASON> is the starting year of the season.
+
+  This method also deals with fixtures that have yet to have been
+  played. If a fixture is found, update the match info if necessary.
+  If a fixture isn't found, insert the fixture information even if the
+  fixture is missing information, and we therefore only know the date,
+  teams and season.
+
   C<MATCH_INFO> is a hashref used for insertion, which can contain
   the C<winning_team_id>, C<home_team_goals>, C<away_team_goals> and
-  C<fixture_date> attributes. The C<winning_team_id> is optional,
-  because sometimes football matches don't have winners. Returns a
-  hashref of the fetched or inserted fixture data.
+  C<fixture_date> attributes. All attributes are optional except for
+  C<fixture_date>.
+
+  Returns a hashref of the fetched or inserted fixture data.
 
 =cut
 
 sub get_or_insert($self, $comp_id, $home_id, $away_id, $season, $match_info) {
     my ($stmt, @bind) = $self->sqla->select(
-        -columns => [ qw(id winning_team_id home_team_goals away_team_goals) ],
+        -columns => [ qw(id fixture_date home_team_goals) ],
         -from    => 'fixtures',
         -where   => {
             competition_id => $comp_id,
@@ -212,14 +221,12 @@ sub get_or_insert($self, $comp_id, $home_id, $away_id, $season, $match_info) {
         }
     );
 
-    my ($id, $win, $h_goals, $a_goals) =
+    my ($id, $saved_date, $saved_htg) =
         $self->dbh->selectrow_array($stmt, undef, @bind);
 
     if (!defined $id) {
-        for (qw(home_team_goals away_team_goals)) {
-            croak "missing $_ attribute in match_info param"
-                unless defined $match_info->{$_};
-        }
+        croak "missing fixture_date attribute in match_info param"
+            unless defined $match_info->{fixture_date};
 
         ($stmt, @bind) = $self->sqla->insert(
             -into      => 'fixtures',
@@ -237,6 +244,26 @@ sub get_or_insert($self, $comp_id, $home_id, $away_id, $season, $match_info) {
         );
 
         ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    } else {
+        my $today = strftime "%Y-%m-%d", localtime;
+        if (!defined $saved_date || ($today ne $saved_date) ||
+            (!defined $saved_htg && defined $match_info->{home_team_goals})) {
+
+            ($stmt, @bind) = $self->sqla->update(
+                -table => 'fixtures',
+                -set   => {
+                    fixture_date    => $match_info->{fixture_date},
+                    winning_team_id => $match_info->{winning_team_id},
+                    home_team_goals => $match_info->{home_team_goals},
+                    away_team_goals => $match_info->{away_team_goals},
+                },
+                -where => {
+                    id => $id,
+                }
+            );
+
+            $self->dbh->do($stmt, undef, @bind);
+        }
     }
 
     return {
@@ -296,24 +323,27 @@ sub process_fixture_data($self, $fixture_data) {
         $away->{id}, $season, $comp_data->{id}
     );
 
-    my $score = $fixture_data->{score}->{fullTime};
-    my $match_info = {
-        home_team_goals => $score->{homeTeam},
-        away_team_goals => $score->{awayTeam},
-    };
-
-    die "Missing match result data" unless defined $score->{homeTeam};
-
-    if ($score->{homeTeam} > $score->{awayTeam}) {
-        $match_info->{winning_team_id} = $home->{id};
-    } elsif ($score->{awayTeam} > $score->{homeTeam}) {
-        $match_info->{winning_team_id} = $away->{id};
-    }
+    die "Missing fixture date" unless defined $fixture_data->{utcDate};
 
     my $fixture_ts = Mojo::Date->new($fixture_data->{utcDate})->epoch;
     my $fixture_dt = DateTime->from_epoch( epoch => $fixture_ts );
 
-    $match_info->{fixture_date} = $fixture_dt->ymd;
+    my $match_info = {
+        fixture_date => $fixture_dt->ymd,
+    };
+
+    my $score = $fixture_data->{score}->{fullTime};
+
+    if (defined $score && defined $score->{homeTeam}) {
+        $match_info->{home_team_goals} = $score->{homeTeam};
+        $match_info->{away_team_goals} = $score->{awayTeam};
+
+        if ($score->{homeTeam} > $score->{awayTeam}) {
+            $match_info->{winning_team_id} = $home->{id};
+        } elsif ($score->{awayTeam} > $score->{homeTeam}) {
+            $match_info->{winning_team_id} = $away->{id};
+        }
+    }
 
     return $self->get_or_insert(
         $comp_data->{id}, $home->{id}, $away->{id}, $season, $match_info

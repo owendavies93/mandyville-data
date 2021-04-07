@@ -15,6 +15,7 @@ requires 'SQL::Abstract::More';
 requires 'YAML::XS';
 
 # tests
+requires 'Clone';
 requires 'Devel::Cover::Report::Coveralls';
 requires 'Overload::FileCheck';
 requires 'Test::Compile';

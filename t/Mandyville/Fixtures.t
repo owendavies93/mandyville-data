@@ -64,20 +64,15 @@ use Mandyville::Fixtures;
     my $home_team_id = $home_team_data->{id};
     my $away_team_id = $away_team_data->{id};
 
-    dies_ok { $fixtures->get_or_insert(
+    throws_ok { $fixtures->get_or_insert(
         $comp_data->{id}, $home_team_id, $away_team_id, $season, {}
-    ) } 'get_or_insert: dies on insert without match info';
+    ) } qr/missing fixture_date/,
+        'get_or_insert: dies on insert without match info';
 
+    my $fixture_date = '2018-01-01';
     my $match_info = {
-        winning_team_id => $home_team_id,
-        home_team_goals => 1,
+        fixture_date => $fixture_date,
     };
-
-    dies_ok { $fixtures->get_or_insert(
-        $comp_data->{id}, $home_team_id, $away_team_id, $season, $match_info
-    ) } 'get_or_insert: dies without full match info';
-
-    $match_info->{away_team_goals} = 3;
 
     my $fixture_data = $fixtures->get_or_insert(
         $comp_data->{id}, $home_team_id, $away_team_id, $season, $match_info
@@ -87,11 +82,33 @@ use Mandyville::Fixtures;
 
     ok( $id, 'get_or_insert: inserts with correct data' );
 
+    ok( !$fixture_data->{home_team_goals},
+        'get_or_insert: match info isn\'t defined' );
+
+    $match_info = {
+        fixture_date    => $fixture_date,
+        winning_team_id => $home_team_id,
+        home_team_goals => 1,
+        away_team_goals => 3,
+    };
+
     $fixture_data = $fixtures->get_or_insert(
         $comp_data->{id}, $home_team_id, $away_team_id, $season, $match_info
     );
 
     cmp_ok( $fixture_data->{id}, '==', $id, 'get_or_insert: returns same ID' );
+
+    ok( $fixture_data->{home_team_goals},
+        'get_or_insert: match data inserted for existing fixture' );
+
+    $match_info->{fixture_date} = '2018-02-01';
+
+    $fixture_data = $fixtures->get_or_insert(
+        $comp_data->{id}, $home_team_id, $away_team_id, $season, $match_info
+    );
+
+    cmp_ok( $fixture_data->{fixture_date}, 'ne', $fixture_date,
+            'get_or_insert: fixture date correctly updated' );
 
     $teams->get_or_insert_team_comp($home_team_id, $season, $comp_data->{id});
     $teams->get_or_insert_team_comp($away_team_id, $season, $comp_data->{id});
@@ -177,10 +194,10 @@ use Mandyville::Fixtures;
     cmp_ok( $data->{fixture_date}, 'eq', '2018-05-26',
             'process_fixture_data: correct fixture date' );
 
-    delete $fixture_info->{score}->{fullTime};
+    delete $fixture_info->{utcDate};
 
     throws_ok { $fixtures->process_fixture_data($fixture_info) }
-                qr/Missing match/, 'process_fixture_data: dies without score';
+                qr/fixture date/, 'process_fixture_data: dies without score';
 }
 
 done_testing();

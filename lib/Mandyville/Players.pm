@@ -582,7 +582,8 @@ sub get_without_understat_data($self, $season, $comp_ids) {
   Process the player data for a fixture, inserting player data where
   necessary. The C<FIXTURE_DATA> paramater should be hashref in the
   same format as the JSON shown in
-  football-data.org/documentation/api#match.
+  football-data.org/documentation/api#match. Doesn't attempt to
+  process player information for an incomplete fixture.
 
   Calls out to the football-data API to fetch player info if the
   player isn't previously known.
@@ -591,6 +592,9 @@ sub get_without_understat_data($self, $season, $comp_ids) {
 
 sub update_fixture_info($self, $fixture_data) {
     my $fixture_info = $self->fixtures->process_fixture_data($fixture_data);
+
+    return unless defined $fixture_data->{score}->{fullTime}->{homeTeam};
+
     my $fixture_id   = $fixture_info->{id};
 
     my $home_id = $fixture_info->{home_team_id};

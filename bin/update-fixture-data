@@ -98,9 +98,7 @@ foreach my $comp (@$valid_comps) {
             try {
                 $players->update_fixture_info($match_info);
             } catch {
-                if (/Missing match result data/) {
-                    debug "Skipping fixture with missing data";
-                } elsif (/missing .* attribute in player_info/) {
+                if (/missing .* attribute in player_info/) {
                     debug "Skipping player with missing data";
                 } else {
                     die "$_";

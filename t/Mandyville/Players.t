@@ -10,6 +10,7 @@ use Mandyville::Fixtures;
 use Mandyville::Teams;
 use Mandyville::Utils qw(find_file);
 
+use Clone qw(clone);
 use Mojo::File;
 use Mojo::JSON qw(decode_json);
 use Mojo::Util qw(encode decode);
@@ -198,6 +199,13 @@ use Mandyville::Players;
 
     my $comp = $comps->get_or_insert('Europe', 250, 2001, 1);
     my $comp_id = $comp->{id};
+
+    my $copy = clone($fixture_info);
+
+    delete $copy->{score}->{fullTime}->{homeTeam};
+
+    ok( !$players->update_fixture_info($copy),
+        'update_fixture_info: returns early for incomplete fixture' );
 
     ok( $players->update_fixture_info($fixture_info),
         'update_fixture_info: updates successfully' );
