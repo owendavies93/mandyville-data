@@ -86,5 +86,27 @@ use Mandyville::API::Understat;
     cmp_ok( scalar @$matches, '==', 1, 'player: correct matches' );
 }
 
+######
+# TEST match
+######
+
+{
+    my $api = Mandyville::API::Understat->new;
+
+    dies_ok { $api->match } 'match: dies without args';
+
+    my $html = Mojo::File->new(find_file('t/data/match.html'))->slurp;
+    my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
+    $mock_ua->mock( 'get', sub {
+        return $api->_get_tx($html);
+    });
+
+    $api->ua($mock_ua);
+    
+    my $match_info = $api->match(1) ;
+
+    ok( $match_info->{h_goals}, 'match: returns data' );
+}
+
 done_testing();
 

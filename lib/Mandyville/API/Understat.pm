@@ -27,6 +27,7 @@ const my $BASE_URL => "https://understat.com/";
 const my $PARSERS  => {
     'main/getPlayersName' => sub { return $_[1] },
     'player'              => \&_parse_match_info,
+    'match'               => \&_parse_single_match_info,
 };
 
 =head1 METHODS
@@ -43,10 +44,26 @@ has 'dom' => sub { Mojo::DOM->new };
 
 =item player ( ID )
 
+  Returns the understat match history for the player represented by
+  C<ID>, where C<ID> is the understat ID of the player, not the
+  mandyville database ID.
+
 =cut
 
 sub player($self, $id) {
     return $self->get("player/$id");
+}
+
+=item match ( ID )
+
+  Returns the understat data for the fixture represented by C<ID>.
+  C<ID> is the understat match ID, not the mandyville database fixture
+  ID.
+
+=cut
+
+sub match($self, $id) {
+    return $self->get("match/$id");
 }
 
 =item search ( NAME )
@@ -74,6 +91,16 @@ sub search($self, $name) {
 
 =cut
 
+sub _extract_JSON_from_text($text) {
+    # Strip everything away except the JSON string and attempt to parse it
+    # Convert the hex escape sequences to their ASCII versions
+    $text =~ s/'\);//g;
+    $text =~ s/\\\\x(\w{2})/chr(hex($1))/eg;
+    $text =~ s/\\x(\w{2})/chr(hex($1))/eg;
+
+    return $text;
+}
+
 sub _get($self, $path) {
     my $body = $self->ua->get($BASE_URL . $path)->res->body;
 
@@ -84,17 +111,18 @@ sub _get($self, $path) {
 
 sub _parse_match_info($self, $body) {
     my $match_info = $self->dom->parse($body)->find('script')->[4]->text;
-
     $match_info =~ /matchesData/ or die "No match data found in script tag";
-
-    # Strip everything away except the JSON string and attempt to parse it
-    # Convert the hex escape sequences to their ASCII versions
     $match_info =~ s/var matchesData\s*=\s*JSON.parse\('//;
-    $match_info =~ s/'\);//g;
-    $match_info =~ s/\\\\x(\w{2})/chr(hex($1))/eg;
-    $match_info =~ s/\\x(\w{2})/chr(hex($1))/eg;
 
-    return $match_info;
+    return _extract_JSON_from_text($match_info);
+}
+
+sub _parse_single_match_info($self, $body) {
+    my $script = $self->dom->parse($body)->find('script')->[1]->text;
+    $script =~ /match_info/ or die "No match info found in script tag";
+    $script =~ s/.*match_info\s*=\s*JSON.parse\('//g;
+
+    return _extract_JSON_from_text($script);
 }
 
 sub _rate_limit($self) {
