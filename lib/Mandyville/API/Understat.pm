@@ -120,6 +120,7 @@ sub _parse_match_info($self, $body) {
 sub _parse_single_match_info($self, $body) {
     my $script = $self->dom->parse($body)->find('script')->[1]->text;
     $script =~ /match_info/ or die "No match info found in script tag";
+    $script =~ s/\s*var shotsData\s*=\s*JSON.parse\([^)]+\),//g;
     $script =~ s/.*match_info\s*=\s*JSON.parse\('//g;
 
     return _extract_JSON_from_text($script);
