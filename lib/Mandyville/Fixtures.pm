@@ -16,7 +16,9 @@ use Mojo::Date;
 use POSIX qw(strftime);
 use SQL::Abstract::More;
 
-const my $MIN_SEASON => 2018;
+const my $DRAW_POINTS => 1;
+const my $MIN_SEASON  => 2018;
+const my $WIN_POINTS  => 3;
 
 =head1 NAME
 
@@ -279,6 +281,27 @@ sub get_or_insert($self, $comp_id, $home_id, $away_id, $season, $match_info) {
     };
 }
 
+=item is_at_home ( FIXTURE_ID, TEAM_ID )
+
+  Returns 1 if the team given by C<TEAM_ID> were the home team in the
+  fixture given by C<FIXTURE_ID>, 0 otherwise.
+
+=cut
+
+sub is_at_home($self, $fixture_id, $team_id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'home_team_id',
+        -from    => 'fixtures',
+        -where   => {
+            id => $fixture_id,
+        }
+    );
+
+    my ($home_team) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    return $home_team == $team_id ? 1 : 0;
+}
+
 =item process_fixture_data ( FIXTURE_DATA )
 
   Process the data for a fixture (called a 'match' in the football-data
@@ -348,6 +371,66 @@ sub process_fixture_data($self, $fixture_data) {
     return $self->get_or_insert(
         $comp_data->{id}, $home->{id}, $away->{id}, $season, $match_info
     );
+}
+
+=item process_understat_fixture_data ( FIXTURE_ID, TEAM_ID, FIXTURE_DATA )
+
+  Process the team performance data for an understat fixture. The
+  C<FIXTURE_DATA> parameter should be a hashref containing the
+  following fields:
+
+      * deep_passes
+      * draw_chance
+      * ppda
+      * loss_chance
+      * shots
+      * shots_on_target
+      * win_chance
+      * xg
+
+  C<FIXTURE_ID> should be the mandyville fixture database ID,
+  C<TEAM_ID> should be the mandyville fixture team ID.
+
+=cut
+
+sub process_understat_fixture_data(
+    $self, $fixture_id, $team_id, $fixture_data) {
+
+    for (qw(deep_passes draw_chance ppda loss_chance shots shots_on_target
+            win_chance xg)) {
+        croak "Missing $_ attribute from fixture_data"
+            unless defined $fixture_data->{$_};
+    }
+
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'id',
+        -from    => 'fixtures_team_performance',
+        -where   => {
+            fixture_id => $fixture_id,
+            team_id    => $team_id,
+        },
+    );
+
+    my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    if (!defined $id) {
+        my $xpts = $WIN_POINTS * $fixture_data->{win_chance} +
+                   $DRAW_POINTS * $fixture_data->{draw_chance};
+
+        $fixture_data->{fixture_id} = $fixture_id;
+        $fixture_data->{team_id}    = $team_id;
+        $fixture_data->{xpts}       = $xpts;
+
+        ($stmt, @bind) = $self->sqla->insert(
+            -into      => 'fixtures_team_performance',
+            -values    => $fixture_data,
+            -returning => 'id',
+        );
+
+        ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    }
+
+    return $id;
 }
 
 sub _calculate_season($self, $season_info) {

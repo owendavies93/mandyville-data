@@ -24,7 +24,8 @@ require_ok 'Mandyville::Fixtures';
 use Mandyville::Fixtures;
 
 ######
-# TEST get_or_insert and find_fixture_from_understat_data
+# TEST get_or_insert, find_fixture_from_understat_data,
+#      process_understat_fixture_data, is_at_home
 ######
 
 {
@@ -142,6 +143,45 @@ use Mandyville::Fixtures;
     ok( !$fixtures->find_fixture_from_understat_data(
             $understat_data, [$comp_data->{id}]
         ), 'find_fixture_from_understat_data: returns undef if old season' );
+
+    my $understat_match_data = {
+        deep_passes     => 3,
+        draw_chance		=> 0.4,
+        ppda			=> 2.3,
+        loss_chance		=> 0.1,
+        shots			=> 3,
+        shots_on_target	=> 1,
+        win_chance		=> 0.5,
+        xg				=> 0.5,
+    };
+
+    dies_ok { $fixtures->process_understat_fixture_data }
+              'process_understat_fixture_data: dies without args';
+
+    my $ftp_id = $fixtures->process_understat_fixture_data(
+        $fixture_id, $home_team_id, $understat_match_data);
+
+    ok( $ftp_id, 'process_understat_fixture_data: correctly inserts data' );
+
+    my $new_id = $fixtures->process_understat_fixture_data(
+        $fixture_id, $away_team_id, $understat_match_data);
+
+    cmp_ok( $ftp_id, '!=', $new_id,
+            'process_understat_fixture_data: correctly inserts other data' );
+
+    my $same_id = $fixtures->process_understat_fixture_data(
+        $fixture_id, $away_team_id, $understat_match_data);
+
+    cmp_ok( $new_id, '==', $same_id,
+            'process_understat_fixture_data: returns same id for same data' );
+
+    dies_ok { $fixtures->is_at_home } 'is_at_home: dies without args';
+
+    cmp_ok( $fixtures->is_at_home($fixture_id, $away_team_id), '==', 0,
+            'is_at_home: correct for away team' );
+
+    cmp_ok( $fixtures->is_at_home($fixture_id, $home_team_id), '==', 1,
+            'is_at_home: correct for home team' );
 }
 
 ######
