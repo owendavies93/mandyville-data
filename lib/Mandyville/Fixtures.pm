@@ -223,7 +223,7 @@ sub get_or_insert($self, $comp_id, $home_id, $away_id, $season, $match_info) {
         }
     );
 
-    my ($id, $saved_date, $saved_htg) =
+    my ($id, $f_date, $saved_htg) =
         $self->dbh->selectrow_array($stmt, undef, @bind);
 
     if (!defined $id) {
@@ -246,9 +246,8 @@ sub get_or_insert($self, $comp_id, $home_id, $away_id, $season, $match_info) {
         );
 
         ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
-    } else {
-        my $today = strftime "%Y-%m-%d", localtime;
-        if (!defined $saved_date || ($today ne $saved_date) ||
+    } elsif (defined $match_info->{fixture_date}) {
+        if (!defined $f_date || $match_info->{fixture_date} ne $f_date ||
             (!defined $saved_htg && defined $match_info->{home_team_goals})) {
 
             ($stmt, @bind) = $self->sqla->update(
