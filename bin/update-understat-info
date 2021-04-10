@@ -59,6 +59,8 @@ my $missing_players =
 
 msg scalar @$missing_players . ' players to fetch';
 
+my $seen_fixtures = {};
+
 foreach my $player (@$missing_players) {
     my $id = $player->{id};
 
@@ -74,8 +76,45 @@ foreach my $player (@$missing_players) {
 
         my $team_id = $players->get_team_for_player_fixture($id, $fixture_id);
 
+        if (!defined $team_id) {
+            debug 'Skipping match with missing info';
+            next;
+        }
+
         $players->update_understat_fixture_info(
             $id, $fixture_id, $team_id, $match_info);
+
+        next if defined $seen_fixtures->{"$fixture_id-$team_id"};
+
+        my $match_data = $uapi->match($match_info->{id});
+
+        my $team_performance = {};
+
+        if ($fixtures->is_at_home($fixture_id, $team_id)) {
+            $team_performance->{deep_passes}     = $match_data->{h_deep};
+            $team_performance->{draw_chance}     = $match_data->{h_d};
+            $team_performance->{ppda}            = $match_data->{h_ppda};
+            $team_performance->{loss_chance}     = $match_data->{h_l};
+            $team_performance->{shots}           = $match_data->{h_shot};
+            $team_performance->{shots_on_target} = $match_data->{h_shotOnTarget};
+            $team_performance->{win_chance}      = $match_data->{h_w};
+            $team_performance->{xg}              = $match_data->{h_xg};
+        } else {
+            $team_performance->{deep_passes}     = $match_data->{a_deep};
+            $team_performance->{draw_chance}     = $match_data->{h_d};
+            $team_performance->{ppda}            = $match_data->{a_ppda};
+            $team_performance->{loss_chance}     = $match_data->{h_w};
+            $team_performance->{shots}           = $match_data->{a_shot};
+            $team_performance->{shots_on_target} = $match_data->{a_shotOnTarget};
+            $team_performance->{win_chance}      = $match_data->{h_l};
+            $team_performance->{xg}              = $match_data->{a_xg};
+        }
+
+        $fixtures->process_understat_fixture_data(
+            $fixture_id, $team_id, $team_performance
+        );
+
+        $seen_fixtures->{"$fixture_id-$team_id"} = 1;
     }
 }
 
