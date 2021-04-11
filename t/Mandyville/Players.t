@@ -92,6 +92,15 @@ use Mandyville::Players;
         sqla      => $sqla,
     });
 
+    my $before = $players->get_or_insert($fd_id, $player_info);
+
+    $players->_update_name($before->{id}, $fd_id);
+
+    my $updated = $players->get_or_insert($fd_id, {});
+
+    cmp_ok( $before->{first_name}, 'ne', $updated->{first_name},
+            '_update_name: name is updated' );
+
     ok( $data = $players->_get_api_info_and_store(56100),
         '_get_api_info_and_store: correctly deals with UTF-8 player data' );
 }
