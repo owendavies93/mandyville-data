@@ -37,6 +37,30 @@ sub gameweeks($self) {
     return $bootstrap->{events};
 }
 
+=item player_history ( ID )
+
+  Fetch the FPL game history for a given player. C<ID> should be the
+  ID of the player in the current season of the game, not the 'code'
+  number.
+
+  Dies if the player history is not found.
+
+=cut
+
+sub player_history($self, $id) {
+    my $elem_summary = $self->get("element-summary/$id/");
+
+    if (!defined $elem_summary->{history}) {
+        if (defined $elem_summary->{detail} && $elem_summary->{detail} =~ /Not found/) {
+            die "Player history for $id not found";
+        } else {
+            die "Unknown error from FPL API player_history";
+        }
+    }
+
+    return $elem_summary->{history};
+}
+
 =item players
 
   Fetch the players in the game for the current season.
