@@ -41,6 +41,9 @@ jobs:
           MANDYVILLE_DB_PASS: ${{secrets.MANDYVILLE_DB_PASS}}
         run: |
           apt clean
+          wget http://deb.debian.org/debian/pool/main/libd/libdbi-perl/libdbi-perl_1.642-1+deb10u2_amd64.deb
+          dpkg -i libdbi-perl_1.642-1+deb10u2_amd64.deb
+          apt install -f
           apt install -y libdbd-pg-perl
           curl -s https://packagecloud.io/install/repositories/golang-migrate/migrate/script.deb.sh | bash
           apt install -y migrate=4.14.1 postgresql-client
