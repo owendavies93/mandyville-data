@@ -448,13 +448,17 @@ sub get_or_insert($self, $football_data_id, $player_info) {
         );
 
         ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+        $first_name   = $player_info->{first_name};
+        $last_name    = $player_info->{last_name};
+        $country_name = $player_info->{country_name};
     }
 
     return {
         id           => $id,
-        first_name   => $player_info->{first_name},
-        last_name    => $player_info->{last_name},
-        country_name => $player_info->{country_name},
+        first_name   => $first_name,
+        last_name    => $last_name,
+        country_name => $country_name,
     };
 }
 

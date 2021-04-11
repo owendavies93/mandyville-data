@@ -59,14 +59,19 @@ use Mandyville::Players;
         country_name => 'Portugal',
     };
 
-    my $data = $players->get_or_insert(10, $player_info);
+    my $fd_id = 10;
+
+    my $data = $players->get_or_insert($fd_id, $player_info);
 
     ok( $data, 'get_or_insert: data inserted correctly' );
 
-    my $fetched_data = $players->get_or_insert(10, {});
+    my $fetched_data = $players->get_or_insert($fd_id, {});
 
     cmp_ok( $data->{id}, '==', $fetched_data->{id},
             'get_or_insert: correctly fetches player from db' );
+
+    cmp_ok( $data->{country_name}, 'eq', $player_info->{country_name},
+            'get_or_insret: country name matches' );
 
     $player_info = {
         first_name   => 'Moeen',
