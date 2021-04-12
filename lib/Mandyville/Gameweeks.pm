@@ -2,6 +2,7 @@ package Mandyville::Gameweeks;
 
 use Mojo::Base -base, -signatures;
 
+use Mandyville::API::FPL;
 use Mandyville::Database;
 use Mandyville::Utils qw(current_season);
 
@@ -152,6 +153,30 @@ sub add_fixture_gameweeks($self) {
     }
 
     return $updated;
+}
+
+=item get_gameweek_id ( SEASON, GAMEWEEK )
+
+  Fetch the gameweek database ID associated with the given C<SEASON>
+  and C<GAMEWEEK>. Dies if no gameweek ID is found.
+
+=cut
+
+sub get_gameweek_id($self, $season, $gameweek) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'id',
+        -from    => 'fpl_gameweeks',
+        -where   => {
+            gameweek => $gameweek,
+            season   => $season,
+        }
+    );
+
+    my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    die "No gameweek found for $season gw $gameweek" if !defined $id;
+
+    return $id;
 }
 
 =item process_gameweeks

@@ -67,7 +67,7 @@ use Mandyville::Gameweeks;
 }
 
 ######
-# TEST add_fixture_gameweeks
+# TEST add_fixture_gameweeks and get_gameweek_id
 ######
 
 {
@@ -164,6 +164,13 @@ use Mandyville::Gameweeks;
 
     cmp_ok( $gw, '==', 38,
             'add_fixture_gameweeks: adds correct gameweek for season end' );
+
+    my $gw_id = $gameweeks->get_gameweek_id($season, $gw);
+
+    ok( $gw_id, 'get_gameweek_id: fetches ID for valid gameweek' );
+
+    dies_ok { $gameweeks->get_gameweek_id($season, 100) }
+              'get_gameweek_id: correctly dies for invalid gameweek';
 }
 
 sub _get_gw_for_fixture($fixture_id, $sqla, $db) {
