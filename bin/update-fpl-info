@@ -71,6 +71,9 @@ foreach my $player (@$player_data) {
         $players->add_fpl_season_info(
             $db_result->{id}, $season, $player->{id}, $player->{element_type}
         );
+
+        my $player_history = $fpl_api->player_history($player->{id});
+        $players->process_fpl_season_history($player->{id}, $player_history);
     } catch {
         if (/Multiple matches/) {
             debug "Multiple matches found for $first $last";
@@ -86,13 +89,16 @@ msg "Done!";
 
 =head1 NAME
 
-  update-fpl-ids
+  update-fpl-info
 
 =head1 DESCRIPTION
 
   Attempts to find players in the mandyville database for every player
   in the FPL game. Any players where we fail to find a matching
   database entry will be logged to STDERR.
+
+  If we find a matching player, update the current season information
+  for the player. Also update the gameweek information for the player.
 
 =cut
 
