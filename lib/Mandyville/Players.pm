@@ -8,6 +8,8 @@ use Mandyville::Competitions;
 use Mandyville::Countries;
 use Mandyville::Database;
 use Mandyville::Fixtures;
+use Mandyville::Gameweeks;
+use Mandyville::Utils qw(current_season debug);
 
 use Const::Fast;
 use Carp;
@@ -52,6 +54,7 @@ const my $UNDERSTAT_MAPPINGS => {
       comps     => $comps,
       countries => Mandyville::Countries->new,
       fixtures  => $fixtures,
+      gameweeks => Mandyville::Gameweeks->new,
       dbh       => $dbh,
       sqla      => $sqla,
   });
@@ -107,6 +110,7 @@ has 'comps'     => sub { shift->{comps} };
 has 'countries' => sub { shift->{countries} };
 has 'dbh'       => sub { shift->{dbh} };
 has 'fixtures'  => sub { shift->{fixtures} };
+has 'gameweeks' => sub { shift->{gameweeks} };
 has 'sqla'      => sub { shift->{sqla} };
 has 'teams'     => sub { shift->{teams} };
 
@@ -143,6 +147,11 @@ sub new($class, $options) {
         sqla      => $options->{sqla},
     });
 
+    $options->{gameweeks} //= Mandyville::Gameweeks->new({
+        dbh  => $options->{dbh},
+        sqla => $options->{sqla},
+    });
+
     $options->{teams} //= Mandyville::Teams->new({
         dbh  => $options->{dbh},
         sqla => $options->{sqla},
@@ -162,6 +171,7 @@ sub new($class, $options) {
         countries => $options->{countries},
         dbh       => $options->{dbh},
         fixtures  => $options->{fixtures},
+        gameweeks => $options->{gameweeks},
         sqla      => $options->{sqla},
         teams     => $options->{teams},
     };
@@ -579,6 +589,75 @@ sub get_without_understat_data($self, $season, $comp_ids) {
     );
 
     return $results;
+}
+
+=item process_fpl_season_history ( PLAYER_ID, FPL_SEASON_INFO )
+
+  Process the FPL current season history for the player given by C<ID>.
+  C<ID> should be the mandyville database ID of the player.
+
+  Goes through each gameweek in the season history, and adds the info
+  if it doesn't already exist. Doesn't overwrite already stored info.
+
+  If the current gameweek is ongoing, we may have the situation where
+  there's partial info in the season history - we deal with this by
+  checking if the score in the fixture info is defined, and ignoring
+  the fixture info if it isn't.
+
+  Returns the number of inserted rows in total.
+
+  Note that we store the actual decimal value of the player, not the
+  integer value returned by the FPL API.
+
+=cut
+
+sub process_fpl_season_history($self, $player_id, $fpl_season_info) {
+    my $season = current_season();
+    my $count = 0;
+    foreach my $gameweek (@$fpl_season_info) {
+        my $gw_number = $gameweek->{round};
+
+        if (!defined $gameweek->{team_h_score}) {
+            debug "Skipping GW$gw_number, it's incomplete";
+            next;
+        }
+
+        my $gw_id = $self->gameweeks->get_gameweek_id($season, $gw_number);
+
+        my ($stmt, @bind) = $self->sqla->select(
+            -columns => 'id',
+            -from    => 'fpl_players_gameweeks',
+            -where   => {
+                player_id       => $player_id,
+                fpl_gameweek_id => $gw_id,
+            },
+        );
+
+        my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+        if (!defined $id) {
+            my $to_insert = {
+                player_id       => $player_id,
+                fpl_gameweek_id => $gw_id,
+                bonus_points    => $gameweek->{bonus},
+                bps             => $gameweek->{bps},
+                total_points    => $gameweek->{total_points},
+                transfers_in    => $gameweek->{transfers_in},
+                transfers_out   => $gameweek->{transfers_out},
+                selected        => $gameweek->{selected},
+                value           => $gameweek->{value} / 10,
+            };
+
+            my ($stmt, @bind) = $self->sqla->insert(
+                -into   => 'fpl_players_gameweeks',
+                -values => $to_insert,
+            );
+
+            $count += $self->dbh->do($stmt, undef, @bind);
+        }
+    }
+
+    return $count;
 }
 
 =item update_fixture_info ( FIXTURE_DATA )

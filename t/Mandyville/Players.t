@@ -17,7 +17,9 @@ use Mojo::Util qw(encode decode);
 use SQL::Abstract::More;
 use Test::Exception;
 use Test::MockObject::Extends;
+use Test::MockTime qw(set_absolute_time);
 use Test::More;
+use Test::Warn;
 
 ######
 # TEST use/require
@@ -351,7 +353,8 @@ use Mandyville::Players;
 }
 
 ######
-# TEST find_player_by_fpl_info, update_fpl_id, add_fpl_season_info
+# TEST find_player_by_fpl_info, update_fpl_id, add_fpl_season_info,
+#      process_fpl_season_history
 ######
 
 {
@@ -463,6 +466,28 @@ use Mandyville::Players;
 
     cmp_ok( $info_id, '==', $new_id,
             'add_fpl_season_info: correctly returns same id' );
+
+    set_absolute_time('2020-01-01T00:00:00Z');
+    $db->rw_db_handle->do(qq(
+        INSERT INTO fpl_gameweeks (season, gameweek, deadline)
+        VALUES (2020, 30, NOW())
+    ));
+
+    my $event_history = _load_test_json('fpl-event-history.json')->{history};
+
+    warnings_like {
+        my $count = $players->process_fpl_season_history(1, $event_history);
+
+        cmp_ok( $count, '==', 1,
+                'process_fpl_season_history: correct number of rows inserted' );
+
+        $count = $players->process_fpl_season_history(1, $event_history);
+
+        cmp_ok( $count, '==', 0,
+                'process_fpl_season_history: no new rows inserted' );
+
+    } [qr/Skipping GW31/, qr/Skipping GW31/],
+       'process_fpl_season_history: correct warnings';
 }
 
 ######
