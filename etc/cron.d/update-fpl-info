@@ -1,0 +1,1 @@
+0 2 * * * mandyville /usr/bin/update-fpl-info 2>&1 | ts '[\%Y-\%m-\%d \%H:\%M:\%S]' >> /var/log/mandyville/update-fpl-info.log && send-healthcheck --name update-fpl-info

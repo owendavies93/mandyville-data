@@ -16,4 +16,5 @@ football_data:
 healthcheck:
   update-competiton-data: 'changeme'
   update-fixture-data: 'changeme'
+  update-fpl-info: 'changeme'
   update-understat-info: 'changeme'
