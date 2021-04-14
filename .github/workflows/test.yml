@@ -54,9 +54,10 @@ jobs:
         env:
           MANDYVILLE_DB_HOST: postgres
           MANDYVILLE_DB_PASS: ${{secrets.MANDYVILLE_DB_PASS}}
-          COVERALLS_REPO_TOKEN: ${{secrets.COVERALLS_TOKEN}}
+          CODECOV_TOKEN: ${{secrets.CODECOV_TOKEN}}
         run: |
-          cover -test -silent -report Coveralls -make 'prove -lr t; exit $?;'
+          cover -test -silent -report codecov -make 'prove -lr t; exit $?;'
+      - uses: codecov/codecov-action@v1
       - uses: act10ns/slack@v1
         env:
           SLACK_WEBHOOK_URL: ${{secrets.SLACK_WEBHOOK_URL}}

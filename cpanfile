@@ -16,7 +16,7 @@ requires 'YAML::XS';
 
 # tests
 requires 'Clone';
-requires 'Devel::Cover::Report::Coveralls';
+requires 'Devel::Cover::Report::Codecov';
 requires 'Overload::FileCheck';
 requires 'Test::Compile';
 requires 'Test::Exception';
