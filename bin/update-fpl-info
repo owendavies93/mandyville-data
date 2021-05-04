@@ -73,7 +73,7 @@ foreach my $player (@$player_data) {
         );
 
         my $player_history = $fpl_api->player_history($player->{id});
-        $players->process_fpl_season_history($player->{id}, $player_history);
+        $players->process_fpl_season_history($db_result->{id}, $player_history);
     } catch {
         if (/Multiple matches/) {
             debug "Multiple matches found for $first $last";
