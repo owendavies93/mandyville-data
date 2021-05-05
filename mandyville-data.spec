@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    1%{?dist}
+Release:    2%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -70,6 +70,9 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Wed May 5 2021 Owen Davies <owen@odavi.es> - 0.0-2-2
+- Use correct player ID when inserting FPL gameweek info
+
 * Mon Apr 12 2021 Owen Davies <owen@odavi.es> - 0.0-2-1
 - Update FPL information regularly
 - Add support for storing future fixture data
