@@ -2,6 +2,10 @@
 
 use Mojo::Base -strict, -signatures;
 
+# This overrides at compile time, so needs to be included before
+# any libs that may use time related functions
+use Test::MockTime qw(set_absolute_time);
+
 use Mandyville::API::FPL;
 use Mandyville::Competitions;
 use Mandyville::Countries;
@@ -12,7 +16,6 @@ use Mojo::File;
 use Mojo::JSON qw(decode_json);
 use Test::Exception;
 use Test::MockObject::Extends;
-use Test::MockTime qw(set_absolute_time);
 use Test::More;
 
 ######
