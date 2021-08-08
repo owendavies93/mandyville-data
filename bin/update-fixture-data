@@ -95,6 +95,12 @@ foreach my $comp (@$valid_comps) {
                 name => $name,
             };
 
+            if (!defined $match_info->{homeTeam}->{name} ||
+                !defined $match_info->{awayTeam}->{name}) {
+                debug "Skipping fixture with missing team data";
+                next;
+            }
+
             try {
                 $players->update_fixture_info($match_info);
             } catch {
