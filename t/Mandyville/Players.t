@@ -470,7 +470,7 @@ use Mandyville::Players;
     cmp_ok( $info_id, '==', $new_id,
             'add_fpl_season_info: correctly returns same id' );
 
-    set_absolute_time('2020-01-01T00:00:00Z');
+    set_absolute_time('2021-01-01T00:00:00Z');
     $db->rw_db_handle->do(qq(
         INSERT INTO fpl_gameweeks (season, gameweek, deadline)
         VALUES (2020, 30, NOW())
