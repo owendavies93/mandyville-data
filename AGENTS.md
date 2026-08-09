@@ -1,0 +1,26 @@
+# AGENTS.md
+
+## Project overview
+
+Perl project for fetching, storing and managing football data for mandyville. Interacts with external APIs and stores data in a database.
+
+## Structure
+
+- `lib/Mandyville/` — Core modules (API clients, database, competitions, fixtures, players, etc.)
+- `bin/` — Executable scripts for data updates
+- `t/` — Tests (run with `prove -lr t`)
+- `etc/` — Configuration files
+- `cpanfile` — Perl dependencies
+
+## Development
+
+- Install deps: `cpanm --installdeps --notest .`
+- Run tests: `prove -lr t`
+- Set `PERL5LIB` to your local dependency path if installed locally
+- DB config via env vars (`MANDYVILLE_DB_HOST`, `MANDYVILLE_DB_PASS`) or `etc/mandyville/config.yaml`
+
+## Code style
+
+- Follow existing Perl conventions in the codebase
+- All modules must pass `perlcritic` (see `t/criticrc` for config)
+- All modules must have POD documentation (checked by `t/podcheck.t` and `t/podcoverage.t`)
