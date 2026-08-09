@@ -85,17 +85,18 @@ sub new($class, $options) {
     return $self;
 }
 
-=item add_fixture_gameweeks
+=item add_fixture_gameweeks ([ SEASON ])
 
   Adds or updates gameweek information for all eligible fixtures in the
   database - that is, any Premier League fixtures which are in the
-  current season. Uses the deadline times of the gameweeks to work out
-  which gameweek the fixture falls into.
+  given C<SEASON>. Uses the deadline times of the gameweeks to work out
+  which gameweek the fixture falls into. If no C<SEASON> is provided,
+  defaults to the current season.
 
 =cut
 
-sub add_fixture_gameweeks($self) {
-    my $season = current_season();
+sub add_fixture_gameweeks($self, $season=undef) {
+    $season //= current_season();
     my $gws = $self->_get_gameweeks_for_season($season);
 
     my ($stmt, @bind) = $self->sqla->select(

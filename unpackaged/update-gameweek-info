@@ -5,9 +5,25 @@ use Mojo::Base -strict;
 use Mandyville::API::FPL;
 use Mandyville::Database;
 use Mandyville::Gameweeks;
-use Mandyville::Utils qw(msg);
+use Mandyville::Utils qw(current_season msg);
 
+use Getopt::Long;
 use SQL::Abstract::More;
+
+my $season;
+my $skip_process;
+
+GetOptions(
+    "season=i"     => \$season,
+    "skip-process" => \$skip_process,
+);
+
+if (!defined $season) {
+    msg 'Season not provided. Using default.';
+    $season = current_season();
+}
+
+msg "Processing season $season";
 
 my $api = Mandyville::API::FPL->new;
 my $db = Mandyville::Database->new;
@@ -18,24 +34,43 @@ my $gameweeks = Mandyville::Gameweeks->new({
     sqla => SQL::Abstract::More->new,
 });
 
-msg "Fetching gameweeks";
-
-$gameweeks->process_gameweeks;
+if (!$skip_process) {
+    msg "Fetching gameweeks";
+    $gameweeks->process_gameweeks;
+} else {
+    msg "Skipping gameweek processing";
+}
 
 msg "Assigning gameweeks to fixtures";
 
-$gameweeks->add_fixture_gameweeks;
+$gameweeks->add_fixture_gameweeks($season);
 
 msg "Done!";
 
 =head1 NAME
 
-  update-gameweek-info
+  update-gameweek-info [ --season|-s SEASON ] [ --skip-process ]
 
 =head1 DESCRIPTION
 
   Fetches the gameweek information from the FPL API, stores it, and
-  assigns fixtures for the current season to a gameweek.
+  assigns fixtures for the given season to a gameweek.
+
+=head1 OPTIONS
+
+=over
+
+=item -s/--season
+
+  The year of the season to process, in YYYY form. The starting year
+  of the season should be used i.e. 2020 would denote the 2020-2021
+  season.
+
+=item --skip-process
+
+  Skip fetching gameweek data from the FPL API. Useful when the
+  gameweek data is already in the database, e.g. when backfilling
+  a previous season.
 
 =back
 

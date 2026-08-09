@@ -176,6 +176,91 @@ use Mandyville::Gameweeks;
               'get_gameweek_id: correctly dies for invalid gameweek';
 }
 
+######
+# TEST add_fixture_gameweeks with explicit season
+######
+
+{
+    set_absolute_time('2021-01-01T00:00:00Z');
+
+    my $mock_api = Test::MockObject::Extends->new(
+        'Mandyville::API::FPL'
+    );
+
+    my $json = Mojo::File->new(find_file('t/data/events.json'))->slurp;
+
+    $mock_api->mock( 'gameweeks', sub {
+        return decode_json($json)->{events};
+    });
+
+    my $db = Mandyville::Database->new;
+    my $sqla = SQL::Abstract::More->new;
+
+    my $countries = Mandyville::Countries->new({
+        dbh => $db->rw_db_handle(),
+    });
+
+    my $comp = Mandyville::Competitions->new({
+        countries => $countries,
+        dbh       => $db->rw_db_handle(),
+    });
+
+    my $teams = Mandyville::Teams->new({
+        dbh => $db->rw_db_handle(),
+    });
+
+    my $fixtures = Mandyville::Fixtures->new({
+        dbh   => $db->rw_db_handle(),
+        teams => $teams,
+    });
+
+    my $country_id = $countries->get_country_id('England');
+    my $comp_id = $comp->get_or_insert(
+        'Premier League', $country_id, 1, 1
+    )->{id};
+
+    my $home = 'Tottenham Hotspur FC';
+    my $away = 'Arsenal FC';
+    my $home_team_id = $teams->get_or_insert($home, 1)->{id};
+    my $away_team_id = $teams->get_or_insert($away, 1)->{id};
+
+    my $gameweeks = Mandyville::Gameweeks->new({
+        api  => $mock_api,
+        dbh  => $db->rw_db_handle(),
+        sqla => $sqla,
+    });
+
+    $gameweeks->process_gameweeks;
+
+    my $season = current_season();
+
+    my $match_info = {
+        winning_team_id => $home_team_id,
+        home_team_goals => 2,
+        away_team_goals => 0,
+        fixture_date    => '2020-12-06',
+    };
+
+    my $fixture_id = $fixtures->get_or_insert(
+        $comp_id, $home_team_id, $away_team_id, $season, $match_info
+    )->{id};
+
+    my $updated = $gameweeks->add_fixture_gameweeks($season);
+
+    ok( $updated, 'add_fixture_gameweeks: works with explicit season' );
+
+    my $gw = _get_gw_for_fixture($fixture_id, $sqla, $db);
+
+    cmp_ok( $gw, '==', 11,
+            'add_fixture_gameweeks: correct gameweek with explicit season' );
+
+    # A different season should not pick up these fixtures
+    my $other_updated = $gameweeks->add_fixture_gameweeks($season - 1);
+
+    cmp_ok( $other_updated, '==', 0,
+            'add_fixture_gameweeks: no fixtures for different season' );
+}
+
 sub _get_gw_for_fixture($fixture_id, $sqla, $db) {
     my ($stmt, @bind) = $sqla->select(
         -columns => 'g.gameweek',
