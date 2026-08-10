@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    5%{?dist}
+Release:    6%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -70,6 +70,10 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Mon Aug 10 2026 Owen Davies <owen@odavi.es> - 0.2-6
+- Upgrade to V4 football data API
+- Update gitignore
+
 * Mon Aug 10 2026 Owen Davies <owen@odavi.es> - 0.0-2.5
 Use HTTPS for football-data API
 
