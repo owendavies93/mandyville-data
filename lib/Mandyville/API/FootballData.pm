@@ -26,7 +26,7 @@ use Time::HiRes qw(time sleep);
 
 =cut
 
-const my $BASE_URL    => "http://api.football-data.org/v2/";
+const my $BASE_URL    => "https://api.football-data.org/v2/";
 const my $MAX_REQS    => 30;
 
 has 'conf' => sub {
