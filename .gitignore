@@ -2,3 +2,5 @@
 *.swo
 cover_db
 .prove
+.*
+*.sql
