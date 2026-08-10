@@ -62,11 +62,13 @@ sub get($self, $path) {
     $self->_rate_limit;
 
     my $json = $self->_get($path);
+    my $decoded = decode_json($json);
 
     my $fh = File::Temp->new( UNLINK => 0, SUFFIX => '.json' );
-    $self->cache->{$path} = $fh->filename;
     print $fh $json;
-    return decode_json($json);
+    $self->cache->{$path} = $fh->filename;
+
+    return $decoded;
 }
 
 =back
