@@ -76,7 +76,7 @@ sub players($self) {
 
 =cut
 
-sub _get($self, $path) {
+sub _get($self, $path, $headers={}) {
     return $self->ua->get($BASE_URL . $path)->res->body;
 }
 

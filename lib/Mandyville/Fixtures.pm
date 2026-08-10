@@ -356,13 +356,13 @@ sub process_fixture_data($self, $fixture_data) {
 
     my $score = $fixture_data->{score}->{fullTime};
 
-    if (defined $score && defined $score->{homeTeam}) {
-        $match_info->{home_team_goals} = $score->{homeTeam};
-        $match_info->{away_team_goals} = $score->{awayTeam};
+    if (defined $score && defined $score->{home}) {
+        $match_info->{home_team_goals} = $score->{home};
+        $match_info->{away_team_goals} = $score->{away};
 
-        if ($score->{homeTeam} > $score->{awayTeam}) {
+        if ($score->{home} > $score->{away}) {
             $match_info->{winning_team_id} = $home->{id};
-        } elsif ($score->{awayTeam} > $score->{homeTeam}) {
+        } elsif ($score->{away} > $score->{home}) {
             $match_info->{winning_team_id} = $away->{id};
         }
     }

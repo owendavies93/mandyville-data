@@ -676,7 +676,7 @@ sub process_fpl_season_history($self, $player_id, $fpl_season_info) {
 sub update_fixture_info($self, $fixture_data) {
     my $fixture_info = $self->fixtures->process_fixture_data($fixture_data);
 
-    return unless defined $fixture_data->{score}->{fullTime}->{homeTeam};
+    return unless defined $fixture_data->{score}->{fullTime}->{home};
 
     my $fixture_id   = $fixture_info->{id};
 

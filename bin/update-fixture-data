@@ -106,6 +106,8 @@ foreach my $comp (@$valid_comps) {
             } catch {
                 if (/missing .* attribute in player_info/) {
                     debug "Skipping player with missing data";
+                } elsif (/No country with name/) {
+                    debug "$_";
                 } else {
                     die "$_";
                 }
@@ -130,7 +132,7 @@ $gameweeks->process_gameweeks;
 
 msg "Assigning gameweeks to fixtures";
 
-$gameweeks->add_fixture_gameweeks;
+$gameweeks->add_fixture_gameweeks($season);
 
 msg "Done!";
 

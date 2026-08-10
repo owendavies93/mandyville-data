@@ -221,7 +221,7 @@ use Mandyville::Players;
 
     my $copy = clone($fixture_info);
 
-    delete $copy->{score}->{fullTime}->{homeTeam};
+    delete $copy->{score}->{fullTime}->{home};
 
     ok( !$players->update_fixture_info($copy),
         'update_fixture_info: returns early for incomplete fixture' );

@@ -38,7 +38,7 @@ has 'ua'    => sub { Mojo::UserAgent->new->connect_timeout(20) };
 
 =over
 
-=item get ( PATH )
+=item get ( PATH [, HEADERS] )
 
   Get the JSON response from C<PATH>. First check the cache to see
   if it exists in there. If the exact path has been fetched by this
@@ -46,9 +46,12 @@ has 'ua'    => sub { Mojo::UserAgent->new->connect_timeout(20) };
   call _rate_limit(), call _get(), and stores the response in the
   cache on disk. Finally, decodes and returns the JSON.
 
+  C<HEADERS> is an optional hashref of extra HTTP headers to include
+  in the request.
+
 =cut
 
-sub get($self, $path) {
+sub get($self, $path, $headers={}) {
     if (defined $self->cache->{$path}) {
         my $cache_path = $self->cache->{$path};
         if (-f $cache_path && -M $cache_path <= $EXPIRY_TIME) {
@@ -61,7 +64,7 @@ sub get($self, $path) {
     # limit ourselves for the minimum required time.
     $self->_rate_limit;
 
-    my $json = $self->_get($path);
+    my $json = $self->_get($path, $headers);
     my $decoded = decode_json($json);
 
     my $fh = File::Temp->new( UNLINK => 0, SUFFIX => '.json' );

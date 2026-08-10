@@ -26,7 +26,7 @@ use Time::HiRes qw(time sleep);
 
 =cut
 
-const my $BASE_URL    => "https://api.football-data.org/v2/";
+const my $BASE_URL    => "https://api.football-data.org/v4/";
 const my $MAX_REQS    => 30;
 
 has 'conf' => sub {
@@ -54,7 +54,14 @@ has 'conf' => sub {
 =cut
 
 sub competition_season_matches($self, $id, $season) {
-    my $response = $self->get("competitions/$id/matches?season=$season");
+    my $response = $self->get(
+        "competitions/$id/matches?season=$season", {
+            'X-Unfold-Lineups'  => 'true',
+            'X-Unfold-Bookings' => 'true',
+            'X-Unfold-Subs'     => 'true',
+            'X-Unfold-Goals'    => 'true',
+        }
+    );
 
     if (defined $response->{error}) {
         if ($response->{error} == 404) {
@@ -90,7 +97,7 @@ sub competitions($self) {
 =cut
 
 sub player($self, $id) {
-    my $path = "players/$id";
+    my $path = "persons/$id";
     my $response = $self->get($path);
 
     if (defined $response->{error}) {
@@ -119,10 +126,11 @@ sub player($self, $id) {
 
 =cut
 
-sub _get($self, $path) {
+sub _get($self, $path, $headers={}) {
     return $self->ua->get(
         $BASE_URL . $path,
-        { 'X-Auth-Token' => $self->conf->{football_data}->{api_token} }
+        { 'X-Auth-Token' => $self->conf->{football_data}->{api_token},
+          %$headers }
     )->res->body;
 }
 
