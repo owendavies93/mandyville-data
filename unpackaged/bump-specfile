@@ -1,0 +1,124 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict, -signatures;
+
+use Getopt::Long;
+use POSIX qw(strftime);
+
+my $bump_type = 'release';
+
+GetOptions(
+    "major"   => sub { $bump_type = 'major' },
+    "minor"   => sub { $bump_type = 'minor' },
+    "release" => sub { $bump_type = 'release' },
+);
+
+my $specfile = 'mandyville-data.spec';
+
+die "Specfile not found\n" unless -f $specfile;
+
+open my $fh, '<', $specfile or die "Can't read specfile: $!\n";
+my $spec = do { local $/; <$fh> };
+close $fh;
+
+my ($version) = $spec =~ /^Version:\s*(.+)$/m;
+my ($release) = $spec =~ /^Release:\s*(\d+)/m;
+
+die "Can't parse version\n" unless defined $version;
+die "Can't parse release\n" unless defined $release;
+
+my ($major, $minor) = split /\./, $version;
+
+my $old_version = "$version-$release";
+
+if ($bump_type eq 'major') {
+    $major++;
+    $minor   = 0;
+    $release = 1;
+} elsif ($bump_type eq 'minor') {
+    $minor++;
+    $release = 1;
+} else {
+    $release++;
+}
+
+my $new_version = "$major.$minor";
+my $new_release = $release;
+
+# Find commits since the last version bump
+my @bump_commits = `git log --oneline --grep="bump" -i`;
+my $last_bump_hash;
+
+for my $line (@bump_commits) {
+    my ($hash) = $line =~ /^(\w+)/;
+    $last_bump_hash = $hash;
+    last;
+}
+
+my @log_entries;
+if (defined $last_bump_hash) {
+    @log_entries = `git log --format="%s" $last_bump_hash..HEAD`;
+} else {
+    @log_entries = `git log --format="%s"`;
+}
+
+chomp @log_entries;
+
+# Build changelog entry
+my $author = `git config user.name`;
+my $email  = `git config user.email`;
+chomp($author, $email);
+
+my $date = strftime("%a %b %d %Y", localtime);
+my $entry = "* $date $author <$email> - $new_version-$new_release";
+
+for my $msg (@log_entries) {
+    $entry .= "\n- $msg";
+}
+
+# Update specfile
+$spec =~ s/^(Version:\s*).*$/$1$new_version/m;
+$spec =~ s/^(Release:\s*)\d+/$1$new_release/m;
+$spec =~ s/(%changelog\n)/$1$entry\n\n/;
+
+open my $out, '>', $specfile or die "Can't write specfile: $!\n";
+print $out $spec;
+close $out;
+
+my $commit_msg = $bump_type eq 'release' ? 'Releasebump' : 'Specbump';
+
+system('git', 'add', $specfile) == 0 or die "git add failed: $!\n";
+system('git', 'commit', '-m', $commit_msg) == 0 or die "git commit failed: $!\n";
+
+say "Bumped $bump_type: $old_version -> $new_version-$new_release";
+
+=head1 NAME
+
+  bump-specfile [ --major | --minor | --release ]
+
+=head1 DESCRIPTION
+
+  Bumps the version in the specfile and adds a changelog entry
+  containing the first line of each commit since the last version
+  bump. Defaults to a release bump.
+
+=head1 OPTIONS
+
+=over
+
+=item --major
+
+  Bump the major version number, resetting minor and release to 0
+  and 1 respectively.
+
+=item --minor
+
+  Bump the minor version number, resetting release to 1.
+
+=item --release
+
+  Bump the release number. This is the default.
+
+=back
+
+=cut
