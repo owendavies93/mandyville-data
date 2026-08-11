@@ -243,6 +243,8 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
     exact match with surname and a match (partial or exact) with first
     name)
   * Check split of 'web name' against first name and last name
+  * Check 'web name' against last name only (with first name
+    disambiguation if multiple matches)
 
   Only matches on players that played a Premier League game at some
   point in the database (not limited to the current season).
@@ -325,12 +327,35 @@ sub find_player_by_fpl_info($self, $fpl_info) {
             return $matches->[0];
         } elsif (scalar @$matches > 1) {
             die 'Multiple matches, bailing out';
-        } else {
-            die 'No match found';
         }
-    } else {
-        die 'No match found';
     }
+
+    # Try web_name as last_name directly
+    $query{'-where'}->{'p.last_name'} = $fpl_info->{web_name};
+    delete $query{'-where'}->{'p.first_name'};
+
+    ($stmt, @bind) = $self->sqla->select(%query);
+
+    $matches =
+        $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+
+    if (scalar @$matches == 1) {
+        return $matches->[0];
+    }
+
+    # Try web_name as last_name with first word of first_name
+    if (scalar @$matches > 1) {
+        my ($fn) = $fpl_info->{first_name} =~ /^(\S+)/;
+        if (defined $fn) {
+            my @filtered = grep {
+                $_->{first_name} eq $fn
+            } @$matches;
+
+            return $filtered[0] if scalar @filtered == 1;
+        }
+    }
+
+    die 'No match found';
 }
 
 =item find_understat_id ( ID )
