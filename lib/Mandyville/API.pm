@@ -8,6 +8,7 @@ use Mojo::File;
 use Mojo::JSON qw(decode_json encode_json);
 use Mojo::Message::Response;
 use Mojo::UserAgent;
+use Try::Tiny;
 
 =head1 NAME
 
@@ -65,7 +66,14 @@ sub get($self, $path, $headers={}) {
     $self->_rate_limit;
 
     my $json = $self->_get($path, $headers);
-    my $decoded = decode_json($json);
+    my $decoded;
+
+    try {
+        $decoded = decode_json($json);
+    } catch {
+        my $preview = substr($json // '', 0, 500);
+        confess "Failed to decode JSON from '$path': $_\nResponse: $preview";
+    };
 
     my $fh = File::Temp->new( UNLINK => 0, SUFFIX => '.json' );
     print $fh $json;
