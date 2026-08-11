@@ -57,9 +57,9 @@ for my $line (@bump_commits) {
 
 my @log_entries;
 if (defined $last_bump_hash) {
-    @log_entries = `git log --format="%s" $last_bump_hash..HEAD`;
+    @log_entries = `git log --no-merges --format="%s" $last_bump_hash..HEAD`;
 } else {
-    @log_entries = `git log --format="%s"`;
+    @log_entries = `git log --no-merges --format="%s"`;
 }
 
 chomp @log_entries;
