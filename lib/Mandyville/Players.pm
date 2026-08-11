@@ -254,8 +254,11 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
   * Match single-name players by web_name
   * Split hyphenated surnames and match on components
 
-  Only matches on players that played a Premier League game at some
-  point in the database (not limited to the current season).
+  If no match is found among Premier League players, broadens the
+  search to all players in the database (e.g. players who joined
+  from other tracked leagues).
+
+  Only matches on players that played a game tracked in the database.
 
 =cut
 
@@ -390,11 +393,7 @@ sub find_player_by_fpl_info($self, $fpl_info) {
         }
     }
 
-    # Accent-insensitive matching
-    my $stripped_first = $self->_strip_accents($fpl_info->{first_name});
-    my $stripped_last  = $self->_strip_accents($fpl_info->{second_name});
-    my $stripped_web   = $self->_strip_accents($fpl_info->{web_name});
-
+    # Fetch all PL players for fuzzy matching
     $query{'-where'} = {
         'c.name'  => 'Premier League',
         'co.name' => 'England',
@@ -406,76 +405,27 @@ sub find_player_by_fpl_info($self, $fpl_info) {
         $stmt, { Slice => {} }, @bind
     );
 
-    my @accent_matches = grep {
-        $self->_strip_accents($_->{first_name}) eq $stripped_first &&
-        $self->_strip_accents($_->{last_name})  eq $stripped_last
-    } @$all_pl;
+    my $pl_result = $self->_fuzzy_match_candidates($fpl_info, $all_pl);
+    return $pl_result if defined $pl_result;
 
-    if (scalar @accent_matches == 1) {
-        return $accent_matches[0];
+    # Broaden search to all players in the database
+    if (!defined $self->{_all_players_cache}) {
+        ($stmt, @bind) = $self->sqla->select(
+            -columns  => [-distinct => qw(p.id p.first_name p.last_name)],
+            -from     => [-join => qw(
+                players|p <=>{p.id=pf.player_id} players_fixtures|pf
+            )],
+        );
+
+        $self->{_all_players_cache} = $self->dbh->selectall_arrayref(
+            $stmt, { Slice => {} }, @bind
+        );
     }
 
-    # Try web_name accent-insensitive as last_name
-    if (scalar @accent_matches == 0) {
-        @accent_matches = grep {
-            $self->_strip_accents($_->{last_name}) eq $stripped_web
-        } @$all_pl;
+    my $all_players = $self->{_all_players_cache};
 
-        if (scalar @accent_matches == 1) {
-            return $accent_matches[0];
-        }
-    }
-
-    # Strip dot suffix from web_name (e.g. Kroupi.Jr -> Kroupi)
-    if ($fpl_info->{web_name} =~ /^(.+)\.[A-Za-z]{1,2}$/) {
-        my $stripped = $1;
-
-        my @suffix_matches = grep {
-            $self->_strip_accents($_->{last_name}) eq
-            $self->_strip_accents($stripped)
-        } @$all_pl;
-
-        if (scalar @suffix_matches == 1) {
-            return $suffix_matches[0];
-        }
-    }
-
-    # Try swapping first and last name (handles reversed name order)
-    my @reversed = grep {
-        $self->_strip_accents($_->{first_name}) eq $stripped_last &&
-        $self->_strip_accents($_->{last_name})  eq $stripped_first
-    } @$all_pl;
-
-    if (scalar @reversed == 1) {
-        return $reversed[0];
-    }
-
-    # Match single-name players by web_name
-    my @single = grep {
-        ($_->{last_name} eq '' &&
-         $self->_strip_accents($_->{first_name}) eq $stripped_web) ||
-        ($_->{first_name} eq '' &&
-         $self->_strip_accents($_->{last_name}) eq $stripped_web)
-    } @$all_pl;
-
-    if (scalar @single == 1) {
-        return $single[0];
-    }
-
-    # Split hyphenated surname and try matching on each component
-    if ($fpl_info->{second_name} =~ /-/) {
-        my @parts = split(/-/, $fpl_info->{second_name});
-
-        foreach my $part (@parts) {
-            my $stripped_part = $self->_strip_accents($part);
-            my @hyphen_matches = grep {
-                $self->_strip_accents($_->{first_name}) eq $stripped_first &&
-                $self->_strip_accents($_->{last_name}) eq $stripped_part
-            } @$all_pl;
-
-            return $hyphen_matches[0] if scalar @hyphen_matches == 1;
-        }
-    }
+    my $broad_result = $self->_fuzzy_match_candidates($fpl_info, $all_players);
+    return $broad_result if defined $broad_result;
 
     die 'No match found';
 }
@@ -1078,6 +1028,84 @@ sub _get_position_id($self, $position) {
     my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
 
     return $id;
+}
+
+sub _fuzzy_match_candidates($self, $fpl_info, $candidates) {
+    my $stripped_first = $self->_strip_accents($fpl_info->{first_name});
+    my $stripped_last  = $self->_strip_accents($fpl_info->{second_name});
+    my $stripped_web   = $self->_strip_accents($fpl_info->{web_name});
+
+    # Accent-insensitive first + last name
+    my @matches = grep {
+        $self->_strip_accents($_->{first_name}) eq $stripped_first &&
+        $self->_strip_accents($_->{last_name})  eq $stripped_last
+    } @$candidates;
+
+    return $matches[0] if scalar @matches == 1;
+
+    # Web name accent-insensitive as last_name
+    @matches = grep {
+        $self->_strip_accents($_->{last_name}) eq $stripped_web
+    } @$candidates;
+
+    return $matches[0] if scalar @matches == 1;
+
+    # Strip dot suffix from web_name (e.g. Kroupi.Jr -> Kroupi)
+    if ($fpl_info->{web_name} =~ /^(.+)\.[A-Za-z]{1,2}$/) {
+        my $stripped = $1;
+
+        my @suffix_matches = grep {
+            $self->_strip_accents($_->{last_name}) eq
+            $self->_strip_accents($stripped)
+        } @$candidates;
+
+        return $suffix_matches[0] if scalar @suffix_matches == 1;
+    }
+
+    # Reversed name order
+    my @reversed = grep {
+        $self->_strip_accents($_->{first_name}) eq $stripped_last &&
+        $self->_strip_accents($_->{last_name})  eq $stripped_first
+    } @$candidates;
+
+    return $reversed[0] if scalar @reversed == 1;
+
+    # Single-name players by web_name
+    my @single = grep {
+        ($_->{last_name} eq '' &&
+         $self->_strip_accents($_->{first_name}) eq $stripped_web) ||
+        ($_->{first_name} eq '' &&
+         $self->_strip_accents($_->{last_name}) eq $stripped_web)
+    } @$candidates;
+
+    return $single[0] if scalar @single == 1;
+
+    # Hyphenated surname components
+    if ($fpl_info->{second_name} =~ /-/) {
+        my @parts = split(/-/, $fpl_info->{second_name});
+
+        foreach my $part (@parts) {
+            my $stripped_part = $self->_strip_accents($part);
+            my @hyphen_matches = grep {
+                $self->_strip_accents($_->{first_name}) eq $stripped_first &&
+                $self->_strip_accents($_->{last_name}) eq $stripped_part
+            } @$candidates;
+
+            return $hyphen_matches[0] if scalar @hyphen_matches == 1;
+        }
+    }
+
+    # Check if DB has hyphenated surname containing the FPL last name
+    my @db_hyphen = grep {
+        $_->{last_name} =~ /-/ &&
+        $self->_strip_accents($_->{first_name}) eq $stripped_first &&
+        any { $self->_strip_accents($_) eq $stripped_last }
+            split(/-/, $_->{last_name})
+    } @$candidates;
+
+    return $db_hyphen[0] if scalar @db_hyphen == 1;
+
+    return;
 }
 
 sub _find_hyphen_duplicate($self, $first_name, $last_name, $country_id) {
