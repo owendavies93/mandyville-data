@@ -249,6 +249,7 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
   * Strip initial prefixes (e.g. 'B.Fernandes' -> 'Fernandes') and
     retry matching
   * Accent-insensitive matching on first and last name
+  * Swap first and last name to handle reversed name order
 
   Only matches on players that played a Premier League game at some
   point in the database (not limited to the current season).
@@ -420,6 +421,16 @@ sub find_player_by_fpl_info($self, $fpl_info) {
         if (scalar @accent_matches == 1) {
             return $accent_matches[0];
         }
+    }
+
+    # Try swapping first and last name (handles reversed name order)
+    my @reversed = grep {
+        $self->_strip_accents($_->{first_name}) eq $stripped_last &&
+        $self->_strip_accents($_->{last_name})  eq $stripped_first
+    } @$all_pl;
+
+    if (scalar @reversed == 1) {
+        return $reversed[0];
     }
 
     die 'No match found';
