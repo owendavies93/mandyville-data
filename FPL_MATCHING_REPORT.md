@@ -123,16 +123,38 @@ When matching fails, splits hyphenated `second_name` values and tries matching
 on each component individually. No additional matches in current data (already
 covered by earlier fixes), but prevents future mismatches.
 
+## Fix 10: Broaden search to all leagues
+
+Previously, fuzzy matching only searched players with Premier League fixture
+data. Many FPL players exist in the DB from other tracked leagues (e.g.
+Brazilian Série A, Bundesliga) but had no PL fixtures yet.
+
+Refactored the fuzzy matching steps into `_fuzzy_match_candidates` and added a
+second pass searching all players with any fixture data. The broad result set
+is cached to avoid repeated queries.
+
+Also added reverse hyphen matching — checking if the DB player has a hyphenated
+surname that contains the FPL surname as a component (e.g. FPL `Obi` → DB
+`Obi-Martin`).
+
+| Matched | Unmatched | Multiple | Delta |
+|---------|-----------|----------|-------|
+| 561     | 15        | 1        | +51   |
+
+Examples: `Emersonn` → Emersonn (Brazilian league fixtures), `Chido Obi` →
+Chido Obi-Martin, `Darko Gyabi` → Darko Gyabi (Championship fixtures), many
+new signings from European leagues.
+
 ## Final results
 
 | Matched | Unmatched | Multiple |
 |---------|-----------|----------|
-| 510     | 66        | 1        |
+| 561     | 15        | 1        |
 
-Match rate improved from **68%** to **88%**. The remaining 66 unmatched players
-are genuinely not in the DB — they're new signings or promoted players without
-Premier League fixture data yet. They will be matched automatically once
-`update-fixture-data` populates their fixture records.
+Match rate improved from **68%** to **97%**. The remaining 15 unmatched
+players are either genuinely not in the DB (no fixture data in any tracked
+league), or have ambiguous names (e.g. Abu Kamara appears twice with the same
+name).
 
 The 1 multiple match (Ben Davies) is an expected ambiguity requiring fixture
 data to disambiguate.
