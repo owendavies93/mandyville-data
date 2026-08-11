@@ -49,8 +49,33 @@ use Mandyville::API;
     $api->mock( '_rate_limit', sub { return 1; } );
     $api->mock( '_get', sub { return '<html>Error</html>'; } );
 
-    throws_ok { $api->get('test') } qr/Failed to decode JSON.*Response:.*<html>/s,
-                'get: dies with response body on invalid JSON';
+    throws_ok { $api->get('test') } qr/Failed to decode JSON.*after retry.*Response:.*<html>/s,
+                'get: dies with response body after retry fails';
+}
+
+######
+# TEST get - retry succeeds
+######
+
+{
+    my $api = Test::MockObject::Extends->new(
+        Mandyville::API->new
+    );
+
+    my $call_count = 0;
+
+    $api->mock( '_rate_limit', sub { return 1; } );
+    $api->mock( '_get', sub {
+        $call_count++;
+        return $call_count == 1 ? '' : '{"ok":true}';
+    });
+
+    my $result;
+    lives_ok { $result = $api->get('test') }
+               'get: succeeds on retry after invalid JSON';
+
+    is( $result->{ok}, 1, 'get: returns correct data after retry' );
+    cmp_ok( $call_count, '==', 2, 'get: called _get twice' );
 }
 
 done_testing();

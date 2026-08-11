@@ -71,8 +71,17 @@ sub get($self, $path, $headers={}) {
     try {
         $decoded = decode_json($json);
     } catch {
-        my $preview = substr($json // '', 0, 500);
-        confess "Failed to decode JSON from '$path': $_\nResponse: $preview";
+        warn "Invalid JSON from '$path', retrying...\n";
+
+        $self->_rate_limit;
+        $json = $self->_get($path, $headers);
+
+        try {
+            $decoded = decode_json($json);
+        } catch {
+            my $preview = substr($json // '', 0, 500);
+            confess "Failed to decode JSON from '$path' after retry: $_\nResponse: $preview";
+        };
     };
 
     my $fh = File::Temp->new( UNLINK => 0, SUFFIX => '.json' );
