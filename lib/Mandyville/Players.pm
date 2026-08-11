@@ -252,6 +252,7 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
   * Swap first and last name to handle reversed name order
   * Strip dot suffixes (e.g. 'Kroupi.Jr' -> 'Kroupi') and retry
   * Match single-name players by web_name
+  * Split hyphenated surnames and match on components
 
   Only matches on players that played a Premier League game at some
   point in the database (not limited to the current season).
@@ -459,6 +460,21 @@ sub find_player_by_fpl_info($self, $fpl_info) {
 
     if (scalar @single == 1) {
         return $single[0];
+    }
+
+    # Split hyphenated surname and try matching on each component
+    if ($fpl_info->{second_name} =~ /-/) {
+        my @parts = split(/-/, $fpl_info->{second_name});
+
+        foreach my $part (@parts) {
+            my $stripped_part = $self->_strip_accents($part);
+            my @hyphen_matches = grep {
+                $self->_strip_accents($_->{first_name}) eq $stripped_first &&
+                $self->_strip_accents($_->{last_name}) eq $stripped_part
+            } @$all_pl;
+
+            return $hyphen_matches[0] if scalar @hyphen_matches == 1;
+        }
     }
 
     die 'No match found';
