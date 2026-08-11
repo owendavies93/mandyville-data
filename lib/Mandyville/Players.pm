@@ -245,6 +245,8 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
   * Check split of 'web name' against first name and last name
   * Check 'web name' against last name only (with first name
     disambiguation if multiple matches)
+  * Strip initial prefixes (e.g. 'B.Fernandes' -> 'Fernandes') and
+    retry matching
 
   Only matches on players that played a Premier League game at some
   point in the database (not limited to the current season).
@@ -349,6 +351,33 @@ sub find_player_by_fpl_info($self, $fpl_info) {
         if (defined $fn) {
             my @filtered = grep {
                 $_->{first_name} eq $fn
+            } @$matches;
+
+            return $filtered[0] if scalar @filtered == 1;
+        }
+    }
+
+    # Strip initial prefix from web_name (e.g. B.Fernandes -> Fernandes)
+    # and retry as last_name
+    if ($fpl_info->{web_name} =~ /^[A-Z]\.(.+)$/) {
+        my $stripped = $1;
+
+        $query{'-where'}->{'p.last_name'} = $stripped;
+        delete $query{'-where'}->{'p.first_name'};
+
+        ($stmt, @bind) = $self->sqla->select(%query);
+
+        $matches =
+            $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+
+        if (scalar @$matches == 1) {
+            return $matches->[0];
+        }
+
+        if (scalar @$matches > 1) {
+            my ($initial) = $fpl_info->{web_name} =~ /^([A-Z])\./;
+            my @filtered = grep {
+                $_->{first_name} =~ /^\Q$initial\E/i
             } @$matches;
 
             return $filtered[0] if scalar @filtered == 1;
