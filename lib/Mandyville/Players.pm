@@ -15,6 +15,7 @@ use Const::Fast;
 use Carp;
 use List::Util qw(any);
 use SQL::Abstract::More;
+use Unicode::Normalize;
 
 const my $UNDERSTAT_MAPPINGS => {
     npxG      => 'npxg',
@@ -247,6 +248,7 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
     disambiguation if multiple matches)
   * Strip initial prefixes (e.g. 'B.Fernandes' -> 'Fernandes') and
     retry matching
+  * Accent-insensitive matching on first and last name
 
   Only matches on players that played a Premier League game at some
   point in the database (not limited to the current season).
@@ -381,6 +383,42 @@ sub find_player_by_fpl_info($self, $fpl_info) {
             } @$matches;
 
             return $filtered[0] if scalar @filtered == 1;
+        }
+    }
+
+    # Accent-insensitive matching
+    my $stripped_first = $self->_strip_accents($fpl_info->{first_name});
+    my $stripped_last  = $self->_strip_accents($fpl_info->{second_name});
+    my $stripped_web   = $self->_strip_accents($fpl_info->{web_name});
+
+    $query{'-where'} = {
+        'c.name'  => 'Premier League',
+        'co.name' => 'England',
+    };
+
+    ($stmt, @bind) = $self->sqla->select(%query);
+
+    my $all_pl = $self->dbh->selectall_arrayref(
+        $stmt, { Slice => {} }, @bind
+    );
+
+    my @accent_matches = grep {
+        $self->_strip_accents($_->{first_name}) eq $stripped_first &&
+        $self->_strip_accents($_->{last_name})  eq $stripped_last
+    } @$all_pl;
+
+    if (scalar @accent_matches == 1) {
+        return $accent_matches[0];
+    }
+
+    # Try web_name accent-insensitive as last_name
+    if (scalar @accent_matches == 0) {
+        @accent_matches = grep {
+            $self->_strip_accents($_->{last_name}) eq $stripped_web
+        } @$all_pl;
+
+        if (scalar @accent_matches == 1) {
+            return $accent_matches[0];
         }
     }
 
@@ -955,6 +993,13 @@ sub _get_position_id($self, $position) {
     my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
 
     return $id;
+}
+
+sub _strip_accents($self, $str) {
+    return '' unless defined $str;
+    my $decomposed = NFKD($str);
+    $decomposed =~ s/\p{Mn}//g;
+    return $decomposed;
 }
 
 sub _sanitise_name($self, $player_info) {
