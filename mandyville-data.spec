@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    9%{?dist}
+Release:    10%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -70,6 +70,8 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Tue Aug 11 2026 Owen Davies <owen@odavi.es> - 0.2-10
+
 * Tue Aug 11 2026 Owen Davies <owen@odavi.es> - 0.2-9
 - Don't include merge commits in changelog entries
 - Correct null minutes insertion bug
