@@ -265,11 +265,12 @@ sub _find_gameweek_from_fixture_date($self, $fixture_date, $gw_info) {
 
 sub _get_gameweeks_for_season($self, $season) {
     my ($stmt, @bind) = $self->sqla->select(
-        -columns => [qw(id gameweek deadline)],
-        -from    => 'fpl_gameweeks',
-        -where   => {
+        -columns  => [qw(id gameweek deadline)],
+        -from     => 'fpl_gameweeks',
+        -where    => {
             season => $season,
-        }
+        },
+        -order_by => 'gameweek',
     );
 
     my $gws = $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
