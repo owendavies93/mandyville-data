@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    7%{?dist}
+Release:    8%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -70,6 +70,11 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Tue Aug 11 2026 Owen Davies <owen@odavi.es> - 0.2-8
+- Merge branch 'main' of github.com:sirgraystar/mandyville-data
+- Add retries on empty API responses
+- Fix gameweek ordering
+
 * Tue Aug 11 2026 Owen Davies <owen@odavi.es> - 0.2-7
 - Merge branch 'main' of github.com:sirgraystar/mandyville-data
 - Give more information when hitting API errors
