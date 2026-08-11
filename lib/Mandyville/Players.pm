@@ -250,6 +250,7 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
     retry matching
   * Accent-insensitive matching on first and last name
   * Swap first and last name to handle reversed name order
+  * Strip dot suffixes (e.g. 'Kroupi.Jr' -> 'Kroupi') and retry
 
   Only matches on players that played a Premier League game at some
   point in the database (not limited to the current season).
@@ -420,6 +421,20 @@ sub find_player_by_fpl_info($self, $fpl_info) {
 
         if (scalar @accent_matches == 1) {
             return $accent_matches[0];
+        }
+    }
+
+    # Strip dot suffix from web_name (e.g. Kroupi.Jr -> Kroupi)
+    if ($fpl_info->{web_name} =~ /^(.+)\.[A-Za-z]{1,2}$/) {
+        my $stripped = $1;
+
+        my @suffix_matches = grep {
+            $self->_strip_accents($_->{last_name}) eq
+            $self->_strip_accents($stripped)
+        } @$all_pl;
+
+        if (scalar @suffix_matches == 1) {
+            return $suffix_matches[0];
         }
     }
 
