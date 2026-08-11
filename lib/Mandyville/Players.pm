@@ -806,7 +806,7 @@ sub _process_team_info($self, $fixture_id, $team_id, $fixture_data, $team_info) 
         my $red    = $self->_has_card($player->{id}, \%bookings, 'RED');
 
         my $minutes_played = exists $subsOff{$player->{id}} ?
-                             $subsOff{$player->{id}} : 90;
+                             ($subsOff{$player->{id}} // 0) : 90;
 
         my $info = {
             player_id   => $player_id,
@@ -830,7 +830,7 @@ sub _process_team_info($self, $fixture_id, $team_id, $fixture_data, $team_info) 
         my $red    = $self->_has_card($player->{id}, \%bookings, 'RED');
 
         my $minutes_played = exists $subsOn{$player->{id}} ?
-                             90 - $subsOn{$player->{id}} : 0;
+                             90 - ($subsOn{$player->{id}} // 90) : 0;
 
         my $info = {
             player_id   => $player_id,
