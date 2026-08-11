@@ -536,9 +536,14 @@ sub get_by_football_data_id($self, $football_data_id) {
 =item get_or_insert ( FOOTBALL_DATA_ID, PLAYER_INFO )
 
   Fetch the player associated with the given C<FOOTBALL_DATA_ID>. If no
-  such player is found, insert the player into the database using the
-  fields provided in C<PLAYER_INFO>. The C<first_name>, C<last_name>
-  and C<country_name> attributes are required for insertion. The
+  such player is found, check for a potential duplicate by looking for
+  players with the same first name and country where one last name is a
+  component of the other's hyphenated surname. If a match is found,
+  update the existing record's C<football_data_id>.
+
+  Otherwise, insert the player into the database using the fields
+  provided in C<PLAYER_INFO>. The C<first_name>, C<last_name> and
+  C<country_name> attributes are required for insertion. The
   C<country_name> field should refer to the player's nationality, not
   their country of birth. Returns a hashref of the fetched or inserted
   player information.
@@ -576,6 +581,31 @@ sub get_or_insert($self, $football_data_id, $player_info) {
 
         die 'No country with name ' . $player_info->{country_name} . ' found'
             unless defined $country_id;
+
+        # Check for potential duplicate with hyphenated surname
+        my $existing = $self->_find_hyphen_duplicate(
+            $player_info->{first_name},
+            $player_info->{last_name},
+            $country_id,
+        );
+
+        if (defined $existing) {
+            ($stmt, @bind) = $self->sqla->update(
+                -table => 'players',
+                -set   => {
+                    football_data_id => $football_data_id,
+                },
+                -where => { id => $existing->{id} },
+            );
+            $self->dbh->do($stmt, undef, @bind);
+
+            return {
+                id           => $existing->{id},
+                first_name   => $existing->{first_name},
+                last_name    => $existing->{last_name},
+                country_name => $player_info->{country_name},
+            };
+        }
 
         ($stmt, @bind) = $self->sqla->insert(
             -into      => 'players',
@@ -1032,6 +1062,36 @@ sub _get_position_id($self, $position) {
     my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
 
     return $id;
+}
+
+sub _find_hyphen_duplicate($self, $first_name, $last_name, $country_id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => [qw(id first_name last_name)],
+        -from    => 'players',
+        -where   => {
+            first_name => $first_name,
+            country_id => $country_id,
+        },
+    );
+
+    my $candidates =
+        $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+
+    for my $c (@$candidates) {
+        next if $c->{last_name} eq $last_name;
+
+        if ($last_name =~ /-/) {
+            my @parts = split(/-/, $last_name);
+            return $c if any { $_ eq $c->{last_name} } @parts;
+        }
+
+        if ($c->{last_name} =~ /-/) {
+            my @parts = split(/-/, $c->{last_name});
+            return $c if any { $_ eq $last_name } @parts;
+        }
+    }
+
+    return;
 }
 
 sub _strip_accents($self, $str) {
