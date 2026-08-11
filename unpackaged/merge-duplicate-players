@@ -1,0 +1,136 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict, -signatures;
+
+use Mandyville::Database;
+use Mandyville::Utils qw(msg);
+
+use Getopt::Long;
+use SQL::Abstract::More;
+
+my $dry_run = 0;
+
+GetOptions(
+    "dry-run" => \$dry_run,
+);
+
+my $db  = Mandyville::Database->new;
+my $dbh = $db->rw_db_handle();
+my $sqla = SQL::Abstract::More->new;
+
+# Known duplicates: [canonical_id, duplicate_id, description]
+my @duplicates = (
+    [1434,  18363, 'Harvey Elliot / Harvey Elliott'],
+    [2246,  20121, 'Kaine Hayden / Kaine Kesler-Hayden'],
+    [2125,  20164, 'Karlan Ahearne-Grant / Karlan Grant'],
+);
+
+# Tables with player_id foreign keys
+my @fk_tables = qw(
+    players_fixtures
+    fpl_season_info
+    fpl_players_gameweeks
+    fpl_names
+    predictions
+);
+
+foreach my $dup (@duplicates) {
+    my ($keep_id, $remove_id, $desc) = @$dup;
+
+    msg "Processing: $desc (keep #$keep_id, remove #$remove_id)";
+
+    $dbh->begin_work;
+
+    eval {
+        foreach my $table (@fk_tables) {
+            my ($stmt, @bind) = $sqla->select(
+                -columns => 'COUNT(*)',
+                -from    => $table,
+                -where   => { player_id => $remove_id },
+            );
+
+            my ($count) = $dbh->selectrow_array($stmt, undef, @bind);
+
+            if ($count > 0) {
+                msg "  $table: $count rows to migrate";
+
+                if (!$dry_run) {
+                    # For tables with unique constraints involving
+                    # player_id, delete conflicting rows first
+                    if ($table eq 'players_fixtures') {
+                        ($stmt, @bind) = $sqla->delete(
+                            -from  => $table,
+                            -where => {
+                                player_id  => $remove_id,
+                                fixture_id => {
+                                    -in => \["SELECT fixture_id FROM $table WHERE player_id = ?", $keep_id],
+                                },
+                            },
+                        );
+                        my $deleted = $dbh->do($stmt, undef, @bind);
+                        msg "    Deleted $deleted conflicting rows"
+                            if $deleted > 0;
+                    }
+
+                    ($stmt, @bind) = $sqla->update(
+                        -table => $table,
+                        -set   => { player_id => $keep_id },
+                        -where => { player_id => $remove_id },
+                    );
+                    $dbh->do($stmt, undef, @bind);
+                }
+            }
+        }
+
+        # Copy football_data_id if the canonical entry doesn't have one
+        my ($stmt, @bind) = $sqla->select(
+            -columns => [qw(football_data_id fpl_id)],
+            -from    => 'players',
+            -where   => { id => $remove_id },
+        );
+        my ($dup_fd_id, $dup_fpl_id) =
+            $dbh->selectrow_array($stmt, undef, @bind);
+
+        if (!$dry_run) {
+            # Delete the duplicate
+            ($stmt, @bind) = $sqla->delete(
+                -from  => 'players',
+                -where => { id => $remove_id },
+            );
+            $dbh->do($stmt, undef, @bind);
+            msg "  Deleted player #$remove_id";
+        }
+
+        $dbh->commit;
+        msg "  Done" . ($dry_run ? " (dry run)" : "");
+    };
+
+    if ($@) {
+        $dbh->rollback;
+        msg "  ERROR: $@";
+    }
+}
+
+msg "Finished!";
+
+=head1 NAME
+
+  merge-duplicate-players [ --dry-run ]
+
+=head1 DESCRIPTION
+
+  Merges known duplicate player entries in the database. Migrates all
+  foreign key references from the duplicate to the canonical entry,
+  then deletes the duplicate row.
+
+=head1 OPTIONS
+
+=over
+
+=item --dry-run
+
+  Show what would be done without making any changes.
+
+=back
+
+=cut
