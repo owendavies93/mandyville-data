@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    10%{?dist}
+Release:    11%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -70,6 +70,13 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Wed Aug 12 2026 Owen Davies <owen@odavi.es> - 0.2-11
+- Remove old scratch md files
+- Update submodule
+- Add support for marking FPL players as active in a certain season
+- Update gitignore
+- Add Rodri duplicate to merge script
+
 * Tue Aug 11 2026 Owen Davies <owen@odavi.es> - 0.2-10
 
 * Tue Aug 11 2026 Owen Davies <owen@odavi.es> - 0.2-9
