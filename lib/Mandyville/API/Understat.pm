@@ -3,6 +3,7 @@ package Mandyville::API::Understat;
 use Mojo::Base 'Mandyville::API', -signatures;
 
 use Const::Fast;
+use Mojo::DOM;
 
 =head1 NAME
 
@@ -46,15 +47,10 @@ sub player($self, $id) {
   C<ID> is the understat match ID, not the mandyville database fixture
   ID.
 
-  Note: the old match page endpoint no longer exists. This method is
-  deprecated and will die if called. Use league team history data
-  instead.
-
 =cut
 
 sub match($self, $id) {
-    die "Understat match endpoint no longer available. " .
-        "Use league team history data instead.";
+    return $self->get("match/$id");
 }
 
 =item search ( NAME )
@@ -85,7 +81,32 @@ sub search($self, $name) {
 =cut
 
 sub _get($self, $path, $headers={}) {
-    return $self->ua->get($BASE_URL . $path => $headers)->res->body;
+    my $body = $self->ua->get($BASE_URL . $path => $headers)->res->body;
+
+    return _parse_single_match_info($body) if $path =~ /^match\//;
+
+    return $body;
+}
+
+sub _extract_JSON_from_text($text) {
+    $text =~ s/^.*JSON\.parse\('//s;
+    $text =~ s/'\);\s*$//s;
+    $text =~ s/\\\\x(\w{2})/chr(hex($1))/eg;
+    $text =~ s/\\x(\w{2})/chr(hex($1))/eg;
+
+    return $text;
+}
+
+sub _parse_single_match_info($body) {
+    my $scripts = Mojo::DOM->new->parse($body)->find('script');
+
+    foreach my $script (@$scripts) {
+        my $text = $script->text // '';
+        next unless $text =~ /match_info\s*=\s*JSON\.parse/;
+        return _extract_JSON_from_text($text);
+    }
+
+    die "No match info found in script tag";
 }
 
 sub _rate_limit($self) {

@@ -370,6 +370,27 @@ sub process_fixture_data($self, $fixture_data) {
     );
 }
 
+=item has_understat_fixture_data ( FIXTURE_ID, TEAM_ID )
+
+  Returns true if team performance data already exists for the given
+  C<FIXTURE_ID> and C<TEAM_ID>.
+
+=cut
+
+sub has_understat_fixture_data($self, $fixture_id, $team_id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'id',
+        -from    => 'fixtures_team_performance',
+        -where   => {
+            fixture_id => $fixture_id,
+            team_id    => $team_id,
+        },
+    );
+
+    my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    return defined $id;
+}
+
 =item process_understat_fixture_data ( FIXTURE_ID, TEAM_ID, FIXTURE_DATA )
 
   Process the team performance data for an understat fixture. The

@@ -5,6 +5,7 @@ use Mojo::Base -strict;
 use Mandyville::Utils qw(find_file);
 
 use Mojo::File;
+use Mojo::Message::Response;
 use Test::Exception;
 use Test::MockObject::Extends;
 use Test::More;
@@ -103,8 +104,24 @@ use Mandyville::API::Understat;
 {
     my $api = Mandyville::API::Understat->new;
 
-    throws_ok { $api->match(1) } qr/no longer available/,
-                'match: dies as deprecated';
+    dies_ok { $api->match } 'match: dies without args';
+
+    my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
+    my $mock_tx = Test::MockObject::Extends->new( 'Mojo::Transaction::HTTP' );
+    $mock_tx->mock( 'res', sub {
+        my $res = Mojo::Message::Response->new;
+        $res->parse("HTTP/1.0 200 OK\x0d\x0a");
+        $res->parse("Content-Type: text/html\x0d\x0a\x0d\x0a");
+        $res->parse("<script>var match_info = JSON.parse('\\x7B\\x22h_goals\\x22\\x3A\\x221\\x22\\x7D');</script>");
+        return $res;
+    });
+    $mock_ua->mock( 'get', sub { return $mock_tx; });
+
+    $api->ua($mock_ua);
+
+    my $match_info = $api->match(1);
+
+    cmp_ok( $match_info->{h_goals}, '==', 1, 'match: returns data' );
 }
 
 done_testing();
