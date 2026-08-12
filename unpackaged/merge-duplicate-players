@@ -23,6 +23,7 @@ my @duplicates = (
     [1434,  18363, 'Harvey Elliot / Harvey Elliott'],
     [2246,  20121, 'Kaine Hayden / Kaine Kesler-Hayden'],
     [2125,  20164, 'Karlan Ahearne-Grant / Karlan Grant'],
+    [2043,  20749, 'Rodri / Rodrigo'],
 );
 
 # Tables with player_id foreign keys
