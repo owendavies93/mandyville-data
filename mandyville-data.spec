@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    12%{?dist}
+Release:    13%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -70,6 +70,9 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Wed Aug 12 2026 Owen Davies <owen@odavi.es> - 0.2-13
+- Get fixture team performance data from understat
+
 * Wed Aug 12 2026 Owen Davies <owen@odavi.es> - 0.2-12
 - Update understat fetching logic to account for new data structure
 
