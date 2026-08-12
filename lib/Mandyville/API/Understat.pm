@@ -3,8 +3,6 @@ package Mandyville::API::Understat;
 use Mojo::Base 'Mandyville::API', -signatures;
 
 use Const::Fast;
-use Mojo::DOM;
-use Mojo::JSON qw(decode_json);
 
 =head1 NAME
 
@@ -24,23 +22,11 @@ use Mojo::JSON qw(decode_json);
 =cut
 
 const my $BASE_URL => "https://understat.com/";
-const my $PARSERS  => {
-    'main/getPlayersName' => sub { return $_[1] },
-    'player'              => \&_parse_match_info,
-    'match'               => \&_parse_single_match_info,
-};
+const my $XHR_HEADER => { 'X-Requested-With' => 'XMLHttpRequest' };
 
 =head1 METHODS
 
 =over
-
-=item dom
-
-  An instance of Mojo::DOM
-
-=cut
-
-has 'dom' => sub { Mojo::DOM->new };
 
 =item player ( ID )
 
@@ -51,7 +37,7 @@ has 'dom' => sub { Mojo::DOM->new };
 =cut
 
 sub player($self, $id) {
-    return $self->get("player/$id");
+    return $self->get("getPlayerData/$id", $XHR_HEADER)->{matches};
 }
 
 =item match ( ID )
@@ -60,10 +46,15 @@ sub player($self, $id) {
   C<ID> is the understat match ID, not the mandyville database fixture
   ID.
 
+  Note: the old match page endpoint no longer exists. This method is
+  deprecated and will die if called. Use league team history data
+  instead.
+
 =cut
 
 sub match($self, $id) {
-    return $self->get("match/$id");
+    die "Understat match endpoint no longer available. " .
+        "Use league team history data instead.";
 }
 
 =item search ( NAME )
@@ -79,7 +70,9 @@ sub match($self, $id) {
 
 sub search($self, $name) {
     $name =~ s/'//g;
-    my $response = $self->get('main/getPlayersName/' . $name);
+    my $response = $self->get(
+        'main/getPlayersName/' . $name, $XHR_HEADER
+    );
 
     return $response->{response}->{players}
         if defined $response->{response}->{success};
@@ -91,39 +84,8 @@ sub search($self, $name) {
 
 =cut
 
-sub _extract_JSON_from_text($text) {
-    # Strip everything away except the JSON string and attempt to parse it
-    # Convert the hex escape sequences to their ASCII versions
-    $text =~ s/'\);//g;
-    $text =~ s/\\\\x(\w{2})/chr(hex($1))/eg;
-    $text =~ s/\\x(\w{2})/chr(hex($1))/eg;
-
-    return $text;
-}
-
-sub _get($self, $path) {
-    my $body = $self->ua->get($BASE_URL . $path)->res->body;
-
-    $path =~ s/\/[^\/]+(?:\/?)$//;
-
-    return $PARSERS->{$path}->($self, $body);
-}
-
-sub _parse_match_info($self, $body) {
-    my $match_info = $self->dom->parse($body)->find('script')->[4]->text;
-    $match_info =~ /matchesData/ or die "No match data found in script tag";
-    $match_info =~ s/var matchesData\s*=\s*JSON.parse\('//;
-
-    return _extract_JSON_from_text($match_info);
-}
-
-sub _parse_single_match_info($self, $body) {
-    my $script = $self->dom->parse($body)->find('script')->[1]->text;
-    $script =~ /match_info/ or die "No match info found in script tag";
-    $script =~ s/\s*var shotsData\s*=\s*JSON.parse\([^)]+\),//g;
-    $script =~ s/.*match_info\s*=\s*JSON.parse\('//g;
-
-    return _extract_JSON_from_text($script);
+sub _get($self, $path, $headers={}) {
+    return $self->ua->get($BASE_URL . $path => $headers)->res->body;
 }
 
 sub _rate_limit($self) {

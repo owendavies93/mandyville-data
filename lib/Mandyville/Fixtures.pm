@@ -179,9 +179,7 @@ sub find_fixture_from_understat_data($self, $understat_data, $comps) {
     }
 
     if (!defined $matching_comp_id) {
-        my $home = $understat_data->{h_team};
-        my $away = $understat_data->{a_team};
-        die "No competition ID found! $home - $away - $season";
+        return;
     }
 
     my $fixture = $self->get_or_insert(

@@ -73,10 +73,18 @@ use Mandyville::API::Understat;
 
     dies_ok { $api->player } 'player: dies without args';
 
-    my $html = Mojo::File->new(find_file('t/data/player.html'))->slurp;
     my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
     $mock_ua->mock( 'get', sub {
-        return $api->_get_tx($html);
+        return $api->_get_tx({
+            matches => [{
+                id       => 1,
+                h_team   => 'Liverpool',
+                a_team   => 'Chelsea',
+                goals    => 1,
+                xG       => '0.85',
+                season   => '2023',
+            }],
+        });
     });
 
     $api->ua($mock_ua);
@@ -84,6 +92,8 @@ use Mandyville::API::Understat;
     my $matches = $api->player(1);
 
     cmp_ok( scalar @$matches, '==', 1, 'player: correct matches' );
+    cmp_ok( $matches->[0]->{h_team}, 'eq', 'Liverpool',
+            'player: correct match data' );
 }
 
 ######
@@ -93,19 +103,8 @@ use Mandyville::API::Understat;
 {
     my $api = Mandyville::API::Understat->new;
 
-    dies_ok { $api->match } 'match: dies without args';
-
-    my $html = Mojo::File->new(find_file('t/data/match.html'))->slurp;
-    my $mock_ua = Test::MockObject::Extends->new( 'Mojo::UserAgent' );
-    $mock_ua->mock( 'get', sub {
-        return $api->_get_tx($html);
-    });
-
-    $api->ua($mock_ua);
-    
-    my $match_info = $api->match(1) ;
-
-    ok( $match_info->{h_goals}, 'match: returns data' );
+    throws_ok { $api->match(1) } qr/no longer available/,
+                'match: dies as deprecated';
 }
 
 done_testing();

@@ -1273,7 +1273,19 @@ sub _search_understat_and_store($self, $string, $id, $teams) {
 
     foreach my $player (@$results) {
         if (any { $_ =~ /\Q$player->{team}\E/ } @$teams) {
-            my ($stmt, @bind) = $self->sqla->update(
+            my ($stmt, @bind) = $self->sqla->select(
+                -columns => 'id',
+                -from    => 'players',
+                -where   => {
+                    understat_id => $player->{id},
+                },
+            );
+
+            my ($existing) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+            next if defined $existing;
+
+            ($stmt, @bind) = $self->sqla->update(
                 -table => 'players',
                 -set   => {
                     understat_id => $player->{id},
