@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    11%{?dist}
+Release:    12%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -70,6 +70,9 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Wed Aug 12 2026 Owen Davies <owen@odavi.es> - 0.2-12
+- Update understat fetching logic to account for new data structure
+
 * Wed Aug 12 2026 Owen Davies <owen@odavi.es> - 0.2-11
 - Remove old scratch md files
 - Update submodule
