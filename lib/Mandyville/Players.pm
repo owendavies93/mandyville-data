@@ -205,7 +205,15 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
 
     my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
 
-    if (!defined $id) {
+    if (defined $id) {
+        ($stmt, @bind) = $self->sqla->update(
+            -table => 'fpl_season_info',
+            -set   => { active => 1 },
+            -where => { id => $id },
+        );
+
+        $self->dbh->do($stmt, undef, @bind);
+    } else {
         ($stmt, @bind) = $self->sqla->select(
             -columns => 'id',
             -from    => 'fpl_positions',
@@ -224,6 +232,7 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
                 season           => $season,
                 fpl_season_id    => $fpl_id,
                 fpl_positions_id => $fpl_position_id,
+                active           => 1,
             },
             -returning => 'id',
         );
@@ -232,6 +241,64 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
     }
 
     return $id;
+}
+
+=item add_unmatched_fpl_player ( FPL_INFO, SEASON )
+
+  Log an unmatched FPL player to the C<fpl_unmatched_players> table.
+  Uses the FPL C<code> (persistent ID) and C<SEASON> as the unique
+  key. If the player already exists for that season, updates the name
+  fields.
+
+=cut
+
+sub add_unmatched_fpl_player($self, $fpl_info, $season) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'id',
+        -from    => 'fpl_unmatched_players',
+        -where   => {
+            fpl_code => $fpl_info->{code},
+            season   => $season,
+        },
+    );
+
+    my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    if (!defined $id) {
+        ($stmt, @bind) = $self->sqla->insert(
+            -into   => 'fpl_unmatched_players',
+            -values => {
+                fpl_code    => $fpl_info->{code},
+                first_name  => $fpl_info->{first_name},
+                second_name => $fpl_info->{second_name},
+                web_name    => $fpl_info->{web_name},
+                season      => $season,
+            },
+        );
+
+        $self->dbh->do($stmt, undef, @bind);
+    }
+
+    return;
+}
+
+=item remove_unmatched_fpl_player ( FPL_CODE, SEASON )
+
+  Remove an FPL player from the C<fpl_unmatched_players> table,
+  indicating they have been successfully matched.
+
+=cut
+
+sub remove_unmatched_fpl_player($self, $fpl_code, $season) {
+    my ($stmt, @bind) = $self->sqla->delete(
+        -from  => 'fpl_unmatched_players',
+        -where => {
+            fpl_code => $fpl_code,
+            season   => $season,
+        },
+    );
+
+    return $self->dbh->do($stmt, undef, @bind);
 }
 
 =item find_player_by_fpl_info ( FPL_INFO )
