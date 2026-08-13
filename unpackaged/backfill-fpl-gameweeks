@@ -192,23 +192,35 @@ sub ensure_season_info($player_id, $season, $element_id, $element_type, $pos_map
     );
 
     my ($id) = $dbh->selectrow_array($stmt, undef, @bind);
-    return if defined $id;
 
     my $fpl_positions_id = $pos_map->{$element_type};
     return unless defined $fpl_positions_id;
 
-    if (!$dry_run) {
-        ($stmt, @bind) = $sqla->insert(
-            -into   => 'fpl_season_info',
-            -values => {
-                player_id        => $player_id,
-                season           => $season,
-                fpl_season_id    => $element_id,
-                fpl_positions_id => $fpl_positions_id,
-            },
-        );
+    if (defined $id) {
+        if (!$dry_run) {
+            ($stmt, @bind) = $sqla->update(
+                -table => 'fpl_season_info',
+                -set   => { active => 1 },
+                -where => { id => $id },
+            );
 
-        $dbh->do($stmt, undef, @bind);
+            $dbh->do($stmt, undef, @bind);
+        }
+    } else {
+        if (!$dry_run) {
+            ($stmt, @bind) = $sqla->insert(
+                -into   => 'fpl_season_info',
+                -values => {
+                    player_id        => $player_id,
+                    season           => $season,
+                    fpl_season_id    => $element_id,
+                    fpl_positions_id => $fpl_positions_id,
+                    active           => 1,
+                },
+            );
+
+            $dbh->do($stmt, undef, @bind);
+        }
     }
 }
 
