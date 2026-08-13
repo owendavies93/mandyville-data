@@ -1,0 +1,169 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict, -signatures;
+
+use Mandyville::Database;
+use Mandyville::Players;
+use Mandyville::Utils qw(msg);
+
+use Getopt::Long;
+use Text::CSV_XS;
+
+my $dry_run  = 0;
+my $repo_dir = '/home/owen/Fantasy-Premier-League';
+my @seasons;
+
+GetOptions(
+    'dry-run'  => \$dry_run,
+    'repo=s'   => \$repo_dir,
+    'season=i' => \@seasons,
+);
+
+die "FPL repo not found at $repo_dir\n" unless -d $repo_dir;
+
+@seasons = (2023, 2024, 2025) unless @seasons;
+
+my $db      = Mandyville::Database->new;
+my $dbh     = $db->rw_db_handle();
+my $players = Mandyville::Players->new({ dbh => $dbh });
+
+# Get all existing fpl_ids to avoid re-matching
+my $existing = $dbh->selectcol_arrayref(
+    'SELECT fpl_id FROM players WHERE fpl_id IS NOT NULL'
+);
+my %known_codes = map { $_ => 1 } @$existing;
+
+msg scalar(keys %known_codes) . " players already have fpl_id set";
+
+# Collect unique FPL players across all requested seasons.
+# A player may appear in multiple seasons with the same code but
+# different element IDs - we only need to match them once.
+my %fpl_players;
+
+for my $season (@seasons) {
+    my $fpl_folder = sprintf('%d-%02d', $season, ($season + 1) % 100);
+    my $raw_csv    = "$repo_dir/data/$fpl_folder/players_raw.csv";
+
+    die "No players_raw.csv at $raw_csv\n" unless -f $raw_csv;
+
+    my $csv = Text::CSV_XS->new({ binary => 1, auto_diag => 1 });
+    open(my $fh, '<:encoding(utf-8)', $raw_csv)
+        or die "Can't open $raw_csv: $!\n";
+
+    my $headers = $csv->getline($fh);
+    $csv->column_names(@$headers);
+
+    while (my $row = $csv->getline_hr($fh)) {
+        my $code = $row->{code};
+        next if $known_codes{$code};
+        next if exists $fpl_players{$code};
+
+        $fpl_players{$code} = {
+            first_name  => $row->{first_name},
+            second_name => $row->{second_name},
+            web_name    => $row->{web_name},
+            code        => $code,
+            season      => $fpl_folder,
+        };
+    }
+
+    close($fh);
+}
+
+msg scalar(keys %fpl_players) . " unmatched FPL players to try";
+
+my $matched   = 0;
+my $unmatched = 0;
+my $multiple  = 0;
+my @unmatched_list;
+
+$dbh->begin_work unless $dry_run;
+
+eval {
+    for my $code (sort { $a <=> $b } keys %fpl_players) {
+        my $fpl = $fpl_players{$code};
+
+        my $result = eval {
+            $players->find_player_by_fpl_info($fpl);
+        };
+
+        if ($@ && $@ =~ /No match found/) {
+            $unmatched++;
+            push @unmatched_list, $fpl;
+            next;
+        } elsif ($@ && $@ =~ /Multiple matches/) {
+            $multiple++;
+            next;
+        } elsif ($@) {
+            die $@;
+        }
+
+        if (!$dry_run) {
+            $players->update_fpl_id($result->{id}, $code);
+        }
+
+        $matched++;
+    }
+
+    $dbh->commit unless $dry_run;
+};
+
+if ($@) {
+    $dbh->rollback unless $dry_run;
+    die "Error: $@\n";
+}
+
+msg "=== RESULTS ===";
+msg "Matched:   $matched";
+msg "Unmatched: $unmatched";
+msg "Multiple:  $multiple";
+msg ($dry_run ? '(dry run)' : '');
+
+if (@unmatched_list) {
+    msg '';
+    msg '=== UNMATCHED ===';
+    for my $fpl (sort { $a->{second_name} cmp $b->{second_name} }
+                 @unmatched_list) {
+        msg "  $fpl->{first_name} $fpl->{second_name}"
+          . " (web: $fpl->{web_name}, code: $fpl->{code})";
+    }
+}
+
+=head1 NAME
+
+  backfill-fpl-ids
+
+=head1 DESCRIPTION
+
+  Match historical FPL players from the Fantasy-Premier-League
+  repository to existing players in the database and set their
+  C<fpl_id>. Uses the same matching logic as C<find_player_by_fpl_info>.
+
+  Only processes players whose FPL code is not already assigned to a
+  DB player. Safe to re-run.
+
+=head1 SYNOPSIS
+
+  backfill-fpl-ids [--season YEAR] [--repo PATH] [--dry-run]
+
+=head1 OPTIONS
+
+=over
+
+=item --season YEAR
+
+  Season to process (can be specified multiple times). Defaults to
+  2023, 2024, 2025.
+
+=item --repo PATH
+
+  Path to the Fantasy-Premier-League repository. Defaults to
+  C</home/owen/Fantasy-Premier-League>.
+
+=item --dry-run
+
+  Show what would be done without making any changes.
+
+=back
+
+=cut

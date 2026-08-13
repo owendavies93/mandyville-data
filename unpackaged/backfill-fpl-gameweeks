@@ -1,0 +1,325 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict, -signatures;
+
+use Mandyville::Database;
+use Mandyville::Utils qw(msg);
+
+use Getopt::Long;
+use SQL::Abstract::More;
+use Text::CSV_XS;
+
+my $dry_run  = 0;
+my $repo_dir = '/home/owen/Fantasy-Premier-League';
+my @seasons;
+
+GetOptions(
+    'dry-run'  => \$dry_run,
+    'repo=s'   => \$repo_dir,
+    'season=i' => \@seasons,
+);
+
+die "FPL repo not found at $repo_dir\n" unless -d $repo_dir;
+
+@seasons = (2023, 2024, 2025) unless @seasons;
+
+my $db   = Mandyville::Database->new;
+my $dbh  = $db->rw_db_handle();
+my $sqla = SQL::Abstract::More->new;
+
+for my $season (@seasons) {
+    backfill_season($season);
+}
+
+msg 'Finished!';
+
+sub backfill_season($season) {
+    my $fpl_folder = sprintf('%d-%02d', $season, ($season + 1) % 100);
+    my $data_dir   = "$repo_dir/data/$fpl_folder";
+
+    die "No data directory for season $season at $data_dir\n"
+        unless -d $data_dir;
+
+    my $players_dir  = "$data_dir/players";
+    my $raw_csv_path = "$data_dir/players_raw.csv";
+
+    die "No players directory at $players_dir\n"
+        unless -d $players_dir;
+    die "No players_raw.csv at $raw_csv_path\n"
+        unless -f $raw_csv_path;
+
+    msg "=== Season $season ($fpl_folder) ===";
+
+    # Build element_id -> directory path index from filesystem
+    my %element_dirs;
+    opendir(my $dh, $players_dir) or die "Can't open $players_dir: $!\n";
+    while (my $entry = readdir($dh)) {
+        next if $entry =~ /^\./;
+        if ($entry =~ /_(\d+)$/) {
+            $element_dirs{$1} = "$players_dir/$entry";
+        }
+    }
+    closedir($dh);
+
+    # Build code -> {element_id, element_type} mapping from players_raw.csv
+    my $csv = Text::CSV_XS->new({ binary => 1, auto_diag => 1 });
+    my %code_to_info;
+
+    open(my $raw_fh, '<:encoding(utf-8)', $raw_csv_path)
+        or die "Can't open $raw_csv_path: $!\n";
+    my $headers = $csv->getline($raw_fh);
+    $csv->column_names(@$headers);
+
+    while (my $row = $csv->getline_hr($raw_fh)) {
+        $code_to_info{$row->{code}} = {
+            element_id   => $row->{id},
+            element_type => $row->{element_type},
+        };
+    }
+    close($raw_fh);
+
+    msg "  Found " . scalar(keys %element_dirs) . " player directories, "
+      . scalar(keys %code_to_info) . " code->element mappings";
+
+    # Build gameweek number -> fpl_gameweek_id mapping for this season
+    my ($stmt, @bind) = $sqla->select(
+        -columns => [qw(id gameweek)],
+        -from    => 'fpl_gameweeks',
+        -where   => { season => $season },
+    );
+
+    my $gw_rows = $dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+    my %gw_map  = map { $_->{gameweek} => $_->{id} } @$gw_rows;
+
+    if (!%gw_map) {
+        msg "  No fpl_gameweeks for season $season, skipping";
+        return;
+    }
+
+    msg "  Found " . scalar(keys %gw_map) . " gameweeks";
+
+    # Get all players with fpl_id set
+    ($stmt, @bind) = $sqla->select(
+        -columns => [qw(id fpl_id)],
+        -from    => 'players',
+        -where   => { fpl_id => { -is_not => undef } },
+    );
+
+    my $players = $dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+    my %fpl_id_to_player = map { $_->{fpl_id} => $_->{id} } @$players;
+
+    # Build fpl_positions element_type_id -> id mapping
+    ($stmt, @bind) = $sqla->select(
+        -columns => [qw(id element_type_id)],
+        -from    => 'fpl_positions',
+    );
+
+    my $pos_rows = $dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+    my %pos_map  = map { $_->{element_type_id} => $_->{id} } @$pos_rows;
+
+    # Match DB players to repo element IDs via fpl_id/code
+    my %matched;
+    for my $code (keys %code_to_info) {
+        my $player_id = $fpl_id_to_player{$code} // next;
+        $matched{$player_id} = {
+            element_id   => $code_to_info{$code}{element_id},
+            element_type => $code_to_info{$code}{element_type},
+            code         => $code,
+        };
+    }
+
+    msg "  Matched " . scalar(keys %matched) . " players via fpl_id/code";
+
+    my $total_inserted = 0;
+    my $total_skipped  = 0;
+    my $players_processed = 0;
+    my $players_missing_dir = 0;
+
+    $dbh->begin_work unless $dry_run;
+
+    eval {
+        for my $player_id (sort { $a <=> $b } keys %matched) {
+            my $info       = $matched{$player_id};
+            my $element_id = $info->{element_id};
+            my $dir = $element_dirs{$element_id};
+
+            if (!defined $dir) {
+                $players_missing_dir++;
+                next;
+            }
+
+            my $gw_file = "$dir/gw.csv";
+            next unless -f $gw_file;
+
+            # Ensure fpl_season_info entry exists
+            ensure_season_info(
+                $player_id, $season, $element_id,
+                $info->{element_type}, \%pos_map,
+            );
+
+            my ($inserted, $skipped) =
+                process_player_gw_file(
+                    $csv, $gw_file, $player_id, \%gw_map
+                );
+
+            $total_inserted += $inserted;
+            $total_skipped  += $skipped;
+            $players_processed++;
+        }
+
+        $dbh->commit unless $dry_run;
+    };
+
+    if ($@) {
+        $dbh->rollback unless $dry_run;
+        die "Error processing season $season: $@\n";
+    }
+
+    msg "  Processed $players_processed players"
+      . " ($players_missing_dir missing dirs)";
+    msg "  Inserted $total_inserted rows, skipped $total_skipped"
+      . ($dry_run ? ' (dry run)' : '');
+}
+
+sub ensure_season_info($player_id, $season, $element_id, $element_type, $pos_map) {
+    my ($stmt, @bind) = $sqla->select(
+        -columns => 'id',
+        -from    => 'fpl_season_info',
+        -where   => {
+            player_id => $player_id,
+            season    => $season,
+        },
+    );
+
+    my ($id) = $dbh->selectrow_array($stmt, undef, @bind);
+    return if defined $id;
+
+    my $fpl_positions_id = $pos_map->{$element_type};
+    return unless defined $fpl_positions_id;
+
+    if (!$dry_run) {
+        ($stmt, @bind) = $sqla->insert(
+            -into   => 'fpl_season_info',
+            -values => {
+                player_id        => $player_id,
+                season           => $season,
+                fpl_season_id    => $element_id,
+                fpl_positions_id => $fpl_positions_id,
+            },
+        );
+
+        $dbh->do($stmt, undef, @bind);
+    }
+}
+
+sub process_player_gw_file($csv, $gw_file, $player_id, $gw_map) {
+    open(my $fh, '<:encoding(utf-8)', $gw_file)
+        or die "Can't open $gw_file: $!\n";
+
+    my $headers = $csv->getline($fh);
+    $csv->column_names(@$headers);
+
+    my $inserted = 0;
+    my $skipped  = 0;
+    my %seen_rounds;
+
+    while (my $row = $csv->getline_hr($fh)) {
+        my $round = $row->{round};
+
+        # Skip duplicate fixture rows in double gameweeks -
+        # matches existing process_fpl_season_history behaviour
+        if ($seen_rounds{$round}) {
+            next;
+        }
+        $seen_rounds{$round} = 1;
+
+        my $gw_id = $gw_map->{$round};
+        next unless defined $gw_id;
+
+        # Check if row already exists
+        my ($stmt, @bind) = $sqla->select(
+            -columns => 'id',
+            -from    => 'fpl_players_gameweeks',
+            -where   => {
+                player_id       => $player_id,
+                fpl_gameweek_id => $gw_id,
+            },
+        );
+
+        my ($existing) = $dbh->selectrow_array($stmt, undef, @bind);
+
+        if (defined $existing) {
+            $skipped++;
+            next;
+        }
+
+        if (!$dry_run) {
+            ($stmt, @bind) = $sqla->insert(
+                -into   => 'fpl_players_gameweeks',
+                -values => {
+                    player_id       => $player_id,
+                    fpl_gameweek_id => $gw_id,
+                    total_points    => $row->{total_points},
+                    bonus_points    => $row->{bonus},
+                    bps             => $row->{bps},
+                    value           => $row->{value} / 10,
+                    selected        => $row->{selected},
+                    transfers_in    => $row->{transfers_in},
+                    transfers_out   => $row->{transfers_out},
+                },
+            );
+
+            $dbh->do($stmt, undef, @bind);
+        }
+
+        $inserted++;
+    }
+
+    close($fh);
+    return ($inserted, $skipped);
+}
+
+=head1 NAME
+
+  backfill-fpl-gameweeks
+
+=head1 DESCRIPTION
+
+  Backfill the C<fpl_players_gameweeks> and C<fpl_season_info> tables
+  using historical CSV data from the Fantasy-Premier-League GitHub
+  repository.
+
+  For each season, matches DB players to the repo via their persistent
+  FPL code (C<players.fpl_id> = C<players_raw.csv> code column), then
+  ensures C<fpl_season_info> entries exist and reads per-gameweek CSV
+  data to insert missing rows.
+
+  For double gameweeks (where a player has multiple fixtures in one
+  round), only the first fixture's data is stored, matching the
+  behaviour of C<process_fpl_season_history>.
+
+=head1 SYNOPSIS
+
+  backfill-fpl-gameweeks [--season YEAR] [--repo PATH] [--dry-run]
+
+=head1 OPTIONS
+
+=over
+
+=item --season YEAR
+
+  Season to backfill (can be specified multiple times). Defaults to
+  2023, 2024, 2025.
+
+=item --repo PATH
+
+  Path to the Fantasy-Premier-League repository. Defaults to
+  C</home/owen/Fantasy-Premier-League>.
+
+=item --dry-run
+
+  Show what would be done without making any changes.
+
+=back
+
+=cut
