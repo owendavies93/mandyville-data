@@ -181,7 +181,25 @@ sub new($class, $options) {
     return $self;
 }
 
-=item add_fpl_season_info ( PLAYER_ID, SEASON, FPL_ID, POSITION_ID )
+=item deactivate_fpl_season ( SEASON )
+
+  Mark all FPL season info entries for the given C<SEASON> as inactive.
+  This should be called before processing FPL player data, so that
+  only players present in the current API response are active.
+
+=cut
+
+sub deactivate_fpl_season($self, $season) {
+    my ($stmt, @bind) = $self->sqla->update(
+        -table => 'fpl_season_info',
+        -set   => { active => 0 },
+        -where => { season => $season },
+    );
+
+    return $self->dbh->do($stmt, undef, @bind);
+}
+
+=item add_fpl_season_info ( PLAYER_ID, SEASON, FPL_ID, POSITION_ID, STARTING_PRICE )
 
   Add the FPL season info for the given C<PLAYER_ID>. Checks for the
   season info before inserting. Returns the ID of the season info
@@ -189,13 +207,15 @@ sub new($class, $options) {
 
   C<FPL_ID> is the current season FPL ID, not the FPL "code".
   C<POSITION_ID> is the entity type ID of the player (a number between
-  1 and 4).
+  1 and 4). C<STARTING_PRICE> is the integer price from the FPL API
+  (i.e. the actual price multiplied by 10). It will be stored as the
+  actual decimal value.
 
 =cut
 
-sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
+sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id, $starting_price) {
     my ($stmt, @bind) = $self->sqla->select(
-        -columns => 'id',
+        -columns => [qw(id starting_price)],
         -from    => 'fpl_season_info',
         -where   => {
             player_id => $player_id,
@@ -203,12 +223,17 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
         },
     );
 
-    my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    my ($id, $existing_price) = $self->dbh->selectrow_array($stmt, undef, @bind);
 
     if (defined $id) {
+        my $set = { active => 1 };
+        if (!defined $existing_price && defined $starting_price) {
+            $set->{starting_price} = $starting_price / 10;
+        }
+
         ($stmt, @bind) = $self->sqla->update(
             -table => 'fpl_season_info',
-            -set   => { active => 1 },
+            -set   => $set,
             -where => { id => $id },
         );
 
@@ -225,15 +250,21 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id) {
         my ($fpl_position_id) =
             $self->dbh->selectrow_array($stmt, undef, @bind);
 
+        my $values = {
+            player_id        => $player_id,
+            season           => $season,
+            fpl_season_id    => $fpl_id,
+            fpl_positions_id => $fpl_position_id,
+            active           => 1,
+        };
+
+        if (defined $starting_price) {
+            $values->{starting_price} = $starting_price / 10;
+        }
+
         ($stmt, @bind) = $self->sqla->insert(
             -into      => 'fpl_season_info',
-            -values    => {
-                player_id        => $player_id,
-                season           => $season,
-                fpl_season_id    => $fpl_id,
-                fpl_positions_id => $fpl_position_id,
-                active           => 1,
-            },
+            -values    => $values,
             -returning => 'id',
         );
 

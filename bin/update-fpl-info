@@ -60,6 +60,8 @@ my $fpl_api = Mandyville::API::FPL->new;
 my $player_data = $fpl_api->players;
 my $season = current_season();
 
+$players->deactivate_fpl_season($season);
+
 foreach my $player (@$player_data) {
     my $first = $player->{first_name};
     my $last  = $player->{second_name};
@@ -68,8 +70,10 @@ foreach my $player (@$player_data) {
         msg "Processing $first $last";
         my $db_result = $players->find_player_by_fpl_info($player);
         $players->update_fpl_id($db_result->{id}, $player->{code});
+        my $starting_price = $player->{now_cost} - $player->{cost_change_start};
         $players->add_fpl_season_info(
-            $db_result->{id}, $season, $player->{id}, $player->{element_type}
+            $db_result->{id}, $season, $player->{id},
+            $player->{element_type}, $starting_price
         );
 
         $players->remove_unmatched_fpl_player($player->{code}, $season);

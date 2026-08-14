@@ -461,14 +461,50 @@ use Mandyville::Players;
     dies_ok { $players->add_fpl_season_info }
               'add_fpl_season_info: dies without args';
 
-    my $info_id = $players->add_fpl_season_info($player_id, 2020, 1, 1);
+    my $info_id = $players->add_fpl_season_info($player_id, 2020, 1, 1, 50);
 
     ok( $info_id, 'add_fpl_season_info: correctly inserts' );
 
-    my $new_id = $players->add_fpl_season_info($player_id, 2020, 1, 1);
+    my ($stored_price) = $db->rw_db_handle->selectrow_array(
+        'SELECT starting_price FROM fpl_season_info WHERE id = ?',
+        undef, $info_id
+    );
+
+    cmp_ok( $stored_price, '==', 5.0,
+            'add_fpl_season_info: starting_price stored correctly' );
+
+    my $new_id = $players->add_fpl_season_info($player_id, 2020, 1, 1, 60);
 
     cmp_ok( $info_id, '==', $new_id,
             'add_fpl_season_info: correctly returns same id' );
+
+    ($stored_price) = $db->rw_db_handle->selectrow_array(
+        'SELECT starting_price FROM fpl_season_info WHERE id = ?',
+        undef, $new_id
+    );
+
+    cmp_ok( $stored_price, '==', 5.0,
+            'add_fpl_season_info: starting_price not overwritten on update' );
+
+    $players->deactivate_fpl_season(2020);
+
+    my ($active_after_deactivate) = $db->rw_db_handle->selectrow_array(
+        'SELECT active FROM fpl_season_info WHERE id = ?',
+        undef, $info_id
+    );
+
+    ok( !$active_after_deactivate,
+        'deactivate_fpl_season: marks rows as inactive' );
+
+    $players->add_fpl_season_info($player_id, 2020, 1, 1, 50);
+
+    my ($active_after_readd) = $db->rw_db_handle->selectrow_array(
+        'SELECT active FROM fpl_season_info WHERE id = ?',
+        undef, $info_id
+    );
+
+    ok( $active_after_readd,
+        'add_fpl_season_info: reactivates after deactivation' );
 
     set_absolute_time('2021-01-01T00:00:00Z');
     $db->rw_db_handle->do(qq(
