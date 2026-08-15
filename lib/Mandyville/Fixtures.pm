@@ -248,14 +248,22 @@ sub get_or_insert($self, $comp_id, $home_id, $away_id, $season, $match_info) {
         if (!defined $f_date || $match_info->{fixture_date} ne $f_date ||
             (!defined $saved_htg && defined $match_info->{home_team_goals})) {
 
+            my $set = {
+                fixture_date => $match_info->{fixture_date},
+            };
+
+            # Only overwrite the result if we actually have one; otherwise
+            # we'd wipe goals when re-processing a fixture that has no score
+            # (e.g. a scheduled re-arrangement of an already-played fixture).
+            if (defined $match_info->{home_team_goals}) {
+                $set->{winning_team_id} = $match_info->{winning_team_id};
+                $set->{home_team_goals} = $match_info->{home_team_goals};
+                $set->{away_team_goals} = $match_info->{away_team_goals};
+            }
+
             ($stmt, @bind) = $self->sqla->update(
                 -table => 'fixtures',
-                -set   => {
-                    fixture_date    => $match_info->{fixture_date},
-                    winning_team_id => $match_info->{winning_team_id},
-                    home_team_goals => $match_info->{home_team_goals},
-                    away_team_goals => $match_info->{away_team_goals},
-                },
+                -set   => $set,
                 -where => {
                     id => $id,
                 }

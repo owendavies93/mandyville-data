@@ -111,6 +111,23 @@ use Mandyville::Fixtures;
     cmp_ok( $fixture_data->{fixture_date}, 'ne', $fixture_date,
             'get_or_insert: fixture date correctly updated' );
 
+    # Re-processing with a changed date but no score must not wipe goals
+    $match_info = {
+        fixture_date => '2018-03-01',
+    };
+
+    $fixtures->get_or_insert(
+        $comp_data->{id}, $home_team_id, $away_team_id, $season, $match_info
+    );
+
+    my ($stored_htg) = $dbh->rw_db_handle->selectrow_array(
+        'SELECT home_team_goals FROM fixtures WHERE id = ?',
+        undef, $id
+    );
+
+    cmp_ok( $stored_htg, '==', 1,
+            'get_or_insert: goals preserved when re-processing without a score' );
+
     $teams->get_or_insert_team_comp($home_team_id, $season, $comp_data->{id});
     $teams->get_or_insert_team_comp($away_team_id, $season, $comp_data->{id});
 

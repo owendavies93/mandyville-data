@@ -461,44 +461,30 @@ use Mandyville::Players;
     dies_ok { $players->add_fpl_season_info }
               'add_fpl_season_info: dies without args';
 
-    my $test_team = $teams->get_or_insert('Test FC', 999);
-    my $test_team_id = $test_team->{id};
-
-    my $info_id = $players->add_fpl_season_info(
-        $player_id, 2020, 1, 1, 50, $test_team_id
-    );
+    my $info_id = $players->add_fpl_season_info($player_id, 2020, 1, 1, 50);
 
     ok( $info_id, 'add_fpl_season_info: correctly inserts' );
 
-    my ($stored_price, $stored_team_id) = $db->rw_db_handle->selectrow_array(
-        'SELECT starting_price, team_id FROM fpl_season_info WHERE id = ?',
+    my ($stored_price) = $db->rw_db_handle->selectrow_array(
+        'SELECT starting_price FROM fpl_season_info WHERE id = ?',
         undef, $info_id
     );
 
     cmp_ok( $stored_price, '==', 5.0,
             'add_fpl_season_info: starting_price stored correctly' );
 
-    cmp_ok( $stored_team_id, '==', $test_team_id,
-            'add_fpl_season_info: team_id stored correctly' );
-
-    my $other_team = $teams->get_or_insert('Other FC', 998);
-    my $new_id = $players->add_fpl_season_info(
-        $player_id, 2020, 1, 1, 60, $other_team->{id}
-    );
+    my $new_id = $players->add_fpl_season_info($player_id, 2020, 1, 1, 60);
 
     cmp_ok( $info_id, '==', $new_id,
             'add_fpl_season_info: correctly returns same id' );
 
-    ($stored_price, $stored_team_id) = $db->rw_db_handle->selectrow_array(
-        'SELECT starting_price, team_id FROM fpl_season_info WHERE id = ?',
+    ($stored_price) = $db->rw_db_handle->selectrow_array(
+        'SELECT starting_price FROM fpl_season_info WHERE id = ?',
         undef, $new_id
     );
 
     cmp_ok( $stored_price, '==', 5.0,
             'add_fpl_season_info: starting_price not overwritten on update' );
-
-    cmp_ok( $stored_team_id, '==', $test_team_id,
-            'add_fpl_season_info: team_id not overwritten on update' );
 
     $players->deactivate_fpl_season(2020);
 
@@ -510,9 +496,7 @@ use Mandyville::Players;
     ok( !$active_after_deactivate,
         'deactivate_fpl_season: marks rows as inactive' );
 
-    $players->add_fpl_season_info(
-        $player_id, 2020, 1, 1, 50, $test_team_id
-    );
+    $players->add_fpl_season_info($player_id, 2020, 1, 1, 50);
 
     my ($active_after_readd) = $db->rw_db_handle->selectrow_array(
         'SELECT active FROM fpl_season_info WHERE id = ?',
@@ -543,6 +527,107 @@ use Mandyville::Players;
 
     } [qr/Skipping GW31/, qr/Skipping GW31/],
        'process_fpl_season_history: correct warnings';
+}
+
+######
+# TEST update_player_team, get_player_team, get_player_teams
+######
+
+{
+    my $db   = Mandyville::Database->new;
+    my $sqla = SQL::Abstract::More->new;
+
+    my $teams = Mandyville::Teams->new({
+        dbh  => $db->rw_db_handle(),
+        sqla => $sqla,
+    });
+
+    my $players = Mandyville::Players->new({
+        dbh  => $db->rw_db_handle(),
+        sqla => $sqla,
+    });
+
+    my $team_a = $teams->get_or_insert('Stint Team A', 900)->{id};
+    my $team_b = $teams->get_or_insert('Stint Team B', 901)->{id};
+
+    # Fresh player
+    my $player_id = $players->get_or_insert(9001, {
+        first_name   => 'Stint',
+        last_name    => 'Player',
+        country_name => 'England',
+    })->{id};
+
+    ok( !$players->get_player_team($player_id),
+        'get_player_team: returns undef with no stints' );
+
+    # First stint
+    my $changed = $players->update_player_team($player_id, $team_a, '2020-08-01');
+
+    cmp_ok( $changed, '==', 1,
+            'update_player_team: inserts a new stint' );
+
+    cmp_ok( $players->get_player_team($player_id), '==', $team_a,
+            'get_player_team: returns current team' );
+
+    # Same team is a no-op
+    $changed = $players->update_player_team($player_id, $team_a, '2020-08-10');
+
+    cmp_ok( $changed, '==', 0,
+            'update_player_team: same team is a no-op' );
+
+    # Team change closes the old stint and opens a new one
+    $changed = $players->update_player_team($player_id, $team_b, '2021-01-01');
+
+    cmp_ok( $changed, '==', 1,
+            'update_player_team: team change inserts new stint' );
+
+    cmp_ok( $players->get_player_team($player_id), '==', $team_b,
+            'get_player_team: returns new current team' );
+
+    cmp_ok( $players->get_player_team($player_id, '2020-08-15'), '==', $team_a,
+            'get_player_team: returns historical team for past date' );
+
+    cmp_ok( $players->get_player_team($player_id, '2020-12-31'), '==', $team_a,
+            'get_player_team: returns old team on day before transfer' );
+
+    cmp_ok( $players->get_player_team($player_id, '2021-01-01'), '==', $team_b,
+            'get_player_team: returns new team on transfer date' );
+
+    my $names = $players->get_player_teams($player_id);
+
+    is_deeply( [ sort @$names ], [ 'Stint Team A', 'Stint Team B' ],
+            'get_player_teams: returns all team names' );
+
+    # Ensure only one open stint exists
+    my ($open_count) = $db->rw_db_handle->selectrow_array(
+        'SELECT COUNT(1) FROM players_teams WHERE player_id = ? AND end_date IS NULL',
+        undef, $player_id
+    );
+
+    cmp_ok( $open_count, '==', 1,
+            'update_player_team: only one open stint remains' );
+
+    # National teams are never recorded
+    my $national_team = $teams->get_or_insert('England', 902)->{id};
+
+    $changed = $players->update_player_team(
+        $player_id, $national_team, '2021-06-01'
+    );
+
+    cmp_ok( $changed, '==', 0,
+            'update_player_team: national team is not recorded' );
+
+    my ($national_count) = $db->rw_db_handle->selectrow_array(
+        'SELECT COUNT(1) FROM players_teams WHERE team_id = ?',
+        undef, $national_team
+    );
+
+    cmp_ok( $national_count, '==', 0,
+            'update_player_team: no stint for national team' );
+
+    # The club stint is unaffected by the skipped national team call
+    cmp_ok( $players->get_player_team($player_id), '==', $team_b,
+            'update_player_team: club stint unaffected by national team' );
 }
 
 ######

@@ -77,6 +77,23 @@ use Mandyville::Teams;
 
     cmp_ok( $results->[0], '==', $id,
             'find_from_name: correct ID from alternate names' );
+
+    my $england = $teams->get_or_insert('England', 102);
+
+    my ($is_national) = $db->rw_db_handle->selectrow_array(
+        'SELECT is_national_team FROM teams WHERE id = ?',
+        undef, $england->{id}
+    );
+
+    ok( $is_national, 'get_or_insert: country name marked as national team' );
+
+    my ($is_club_national) = $db->rw_db_handle->selectrow_array(
+        'SELECT is_national_team FROM teams WHERE id = ?',
+        undef, $id
+    );
+
+    ok( !$is_club_national,
+        'get_or_insert: club name not marked as national team' );
 }
 
 ######

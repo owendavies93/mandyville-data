@@ -1,0 +1,84 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict;
+
+use Mandyville::Database;
+use Mandyville::Utils qw(msg);
+
+my $db  = Mandyville::Database->new;
+my $dbh = $db->rw_db_handle();
+
+$dbh->do('TRUNCATE players_teams');
+
+my $stmt = q{
+    WITH distinct_fixtures AS (
+        SELECT DISTINCT pf.player_id, pf.team_id, f.fixture_date
+        FROM players_fixtures pf
+        JOIN fixtures f ON f.id = pf.fixture_id
+        JOIN teams t ON t.id = pf.team_id
+        WHERE f.fixture_date IS NOT NULL
+          AND f.home_team_goals IS NOT NULL
+          AND t.is_national_team = false
+    ),
+    with_prev AS (
+        SELECT player_id, team_id, fixture_date,
+               LAG(team_id) OVER (
+                   PARTITION BY player_id ORDER BY fixture_date, team_id
+               ) AS prev_team
+        FROM distinct_fixtures
+    ),
+    with_grp AS (
+        SELECT player_id, team_id, fixture_date,
+               SUM(CASE WHEN prev_team IS NULL OR prev_team <> team_id
+                        THEN 1 ELSE 0 END) OVER (
+                   PARTITION BY player_id ORDER BY fixture_date, team_id
+                   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+               ) AS grp
+        FROM with_prev
+    ),
+    stints AS (
+        SELECT player_id, team_id,
+               MIN(fixture_date) AS start_date,
+               MAX(fixture_date) AS last_date
+        FROM with_grp
+        GROUP BY player_id, team_id, grp
+    ),
+    with_end AS (
+        SELECT player_id, team_id, start_date,
+               LEAD(start_date) OVER (
+                   PARTITION BY player_id ORDER BY start_date
+               ) AS end_date
+        FROM stints
+    )
+    INSERT INTO players_teams (player_id, team_id, start_date, end_date)
+    SELECT player_id, team_id, start_date, end_date
+    FROM with_end
+    WHERE end_date IS NULL OR end_date > start_date
+};
+
+my $inserted = $dbh->do($stmt);
+
+msg $inserted . ' player team stints inserted';
+
+my ($count) = $dbh->selectrow_array(
+    'SELECT COUNT(1) FROM players_teams'
+);
+
+msg "players_teams now has $count rows";
+
+=head1 NAME
+
+  backfill-players-teams
+
+=head1 DESCRIPTION
+
+  Populates the C<players_teams> table from existing
+  C<players_fixtures> data. Groups each player's fixtures into stints
+  (continuous periods at a team), closing a stint when the player next
+  appears for a different team, and leaving the most recent stint
+  open.
+
+  This is intended as a one-off backfill; going forward, the table is
+  maintained by C<update-fixture-data> and C<update-fpl-info>.
+
+=cut

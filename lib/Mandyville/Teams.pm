@@ -143,6 +143,9 @@ sub get_comps_for_season($self, $team_id, $season) {
   Returns a hashref of the team data that was either fetched or
   inserted, with the C<name>, C<id> and C<football_data_id> attributes.
 
+  When inserting, the team's C<is_national_team> flag is set based on
+  whether its name matches a country or country alternate name.
+
 =cut
 
 sub get_or_insert($self, $name, $football_data_id) {
@@ -163,6 +166,7 @@ sub get_or_insert($self, $name, $football_data_id) {
             -values    => {
                 'football_data_id' => $football_data_id,
                 'name'             => $name,
+                'is_national_team' => $self->_is_national_team_name($name),
             },
             -returning => 'id',
         );
@@ -175,6 +179,28 @@ sub get_or_insert($self, $name, $football_data_id) {
         name             => $name,
         football_data_id => $football_data_id,
     };
+}
+
+sub _is_national_team_name($self, $name) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'id',
+        -from    => 'countries',
+        -where   => { name => $name },
+    );
+
+    my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    return 1 if defined $id;
+
+    ($stmt, @bind) = $self->sqla->select(
+        -columns => 'id',
+        -from    => 'country_alternate_names',
+        -where   => { alternate_name => $name },
+    );
+
+    ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    return 1 if defined $id;
+
+    return 0;
 }
 
 =item get_or_insert_team_comp ( TEAM_ID, SEASON, COMP_ID )

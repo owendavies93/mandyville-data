@@ -199,7 +199,7 @@ sub deactivate_fpl_season($self, $season) {
     return $self->dbh->do($stmt, undef, @bind);
 }
 
-=item add_fpl_season_info ( PLAYER_ID, SEASON, FPL_ID, POSITION_ID, STARTING_PRICE, TEAM_ID )
+=item add_fpl_season_info ( PLAYER_ID, SEASON, FPL_ID, POSITION_ID, STARTING_PRICE )
 
   Add the FPL season info for the given C<PLAYER_ID>. Checks for the
   season info before inserting. Returns the ID of the season info
@@ -209,13 +209,13 @@ sub deactivate_fpl_season($self, $season) {
   C<POSITION_ID> is the entity type ID of the player (a number between
   1 and 4). C<STARTING_PRICE> is the integer price from the FPL API
   (i.e. the actual price multiplied by 10). It will be stored as the
-  actual decimal value. C<TEAM_ID> is the mandyville database team ID.
+  actual decimal value.
 
 =cut
 
-sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id, $starting_price, $team_id) {
+sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id, $starting_price) {
     my ($stmt, @bind) = $self->sqla->select(
-        -columns => [qw(id starting_price team_id)],
+        -columns => [qw(id starting_price)],
         -from    => 'fpl_season_info',
         -where   => {
             player_id => $player_id,
@@ -223,16 +223,12 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id, $star
         },
     );
 
-    my ($id, $existing_price, $existing_team_id) =
-        $self->dbh->selectrow_array($stmt, undef, @bind);
+    my ($id, $existing_price) = $self->dbh->selectrow_array($stmt, undef, @bind);
 
     if (defined $id) {
         my $set = { active => 1 };
         if (!defined $existing_price && defined $starting_price) {
             $set->{starting_price} = $starting_price / 10;
-        }
-        if (!defined $existing_team_id && defined $team_id) {
-            $set->{team_id} = $team_id;
         }
 
         ($stmt, @bind) = $self->sqla->update(
@@ -264,10 +260,6 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id, $star
 
         if (defined $starting_price) {
             $values->{starting_price} = $starting_price / 10;
-        }
-
-        if (defined $team_id) {
-            $values->{team_id} = $team_id;
         }
 
         ($stmt, @bind) = $self->sqla->insert(
@@ -726,6 +718,131 @@ sub get_team_for_player_fixture($self, $player_id, $fixture_id) {
     return $team_id;
 }
 
+=item update_player_team ( PLAYER_ID, TEAM_ID, DATE )
+
+  Record that the player given by C<PLAYER_ID> plays for the team
+  given by C<TEAM_ID> as of C<DATE>. Updates the C<players_teams>
+  table so that the player has an open stint for C<TEAM_ID>:
+
+  * If an open stint for the same team already exists, do nothing.
+  * If an open stint for a different team exists, close it by setting
+    its C<end_date> to C<DATE>, and insert a new open stint starting
+    on C<DATE>.
+  * If no open stint exists, insert a new open stint starting on
+    C<DATE>.
+
+  National teams are ignored and never recorded in C<players_teams>.
+
+  Returns the number of rows modified (0 or 1).
+
+=cut
+
+sub update_player_team($self, $player_id, $team_id, $date) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'is_national_team',
+        -from    => 'teams',
+        -where   => { id => $team_id },
+    );
+
+    my ($is_national_team) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    return 0 if $is_national_team;
+
+    ($stmt, @bind) = $self->sqla->select(
+        -columns => [qw(id team_id)],
+        -from    => 'players_teams',
+        -where   => {
+            player_id => $player_id,
+            end_date  => undef,
+        },
+    );
+
+    my ($stint_id, $stint_team_id) =
+        $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    return 0 if defined $stint_id && $stint_team_id == $team_id;
+
+    if (defined $stint_id) {
+        ($stmt, @bind) = $self->sqla->update(
+            -table => 'players_teams',
+            -set   => { end_date => $date },
+            -where => { id => $stint_id },
+        );
+
+        $self->dbh->do($stmt, undef, @bind);
+    }
+
+    ($stmt, @bind) = $self->sqla->insert(
+        -into   => 'players_teams',
+        -values => {
+            player_id  => $player_id,
+            team_id    => $team_id,
+            start_date => $date,
+        },
+    );
+
+    return $self->dbh->do($stmt, undef, @bind);
+}
+
+=item get_player_team ( PLAYER_ID, [ DATE ] )
+
+  Fetch the team ID for the player given by C<PLAYER_ID>. If C<DATE>
+  is provided, returns the team the player was at on that date;
+  otherwise returns the team the player currently plays for (i.e. the
+  team of their open stint). Returns undef if no matching stint is
+  found.
+
+=cut
+
+sub get_player_team($self, $player_id, $date=undef) {
+    my $where = { player_id => $player_id };
+
+    if (defined $date) {
+        $where = $self->sqla->merge_conditions($where, {
+            'start_date' => { '<=' => $date },
+            '-or' => [
+                { 'end_date' => { '>' => $date } },
+                { 'end_date' => undef },
+            ],
+        });
+    } else {
+        $where->{end_date} = undef;
+    }
+
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'team_id',
+        -from    => 'players_teams',
+        -where   => $where,
+        -order_by => 'start_date DESC',
+        -limit   => 1,
+    );
+
+    my ($team_id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    return $team_id;
+}
+
+=item get_player_teams ( PLAYER_ID )
+
+  Fetch all team names the player given by C<PLAYER_ID> has played
+  for, based on their stints in the C<players_teams> table. Returns an
+  arrayref of team names.
+
+=cut
+
+sub get_player_teams($self, $player_id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns  => [-distinct => 't.name'],
+        -from     => [-join => qw(
+            players_teams|pt <=>{pt.team_id=t.id} teams|t
+        )],
+        -where    => {
+            'pt.player_id' => $player_id,
+        },
+    );
+
+    return $self->dbh->selectcol_arrayref($stmt, undef, @bind);
+}
+
 =item get_with_missing_understat_ids ( COMP_IDS )
 
   Fetch all player IDs from the database without corresponding
@@ -912,14 +1029,17 @@ sub update_fixture_info($self, $fixture_data) {
     return unless defined $fixture_data->{score}->{fullTime}->{home};
 
     my $fixture_id   = $fixture_info->{id};
+    my $fixture_date = $fixture_info->{fixture_date};
 
     my $home_id = $fixture_info->{home_team_id};
     $self->_process_team_info(
-        $fixture_id, $home_id, $fixture_data, $fixture_data->{homeTeam});
+        $fixture_id, $home_id, $fixture_data, $fixture_data->{homeTeam},
+        $fixture_date);
 
     my $away_id = $fixture_info->{away_team_id};
     return $self->_process_team_info(
-        $fixture_id, $away_id, $fixture_data, $fixture_data->{awayTeam});
+        $fixture_id, $away_id, $fixture_data, $fixture_data->{awayTeam},
+        $fixture_date);
 }
 
 =item update_fpl_id ( PLAYER_ID, FPL_ID )
@@ -1012,7 +1132,7 @@ sub update_understat_fixture_info(
     return $self->dbh->do($stmt, undef, @bind);
 }
 
-sub _process_team_info($self, $fixture_id, $team_id, $fixture_data, $team_info) {
+sub _process_team_info($self, $fixture_id, $team_id, $fixture_data, $team_info, $fixture_date) {
     my $starters = $team_info->{lineup};
     my $subs     = $team_info->{bench};
 
@@ -1050,7 +1170,7 @@ sub _process_team_info($self, $fixture_id, $team_id, $fixture_data, $team_info) 
             red_card    => $red || 0,
         };
 
-        $self->_insert_player_fixture($info);
+        $self->_insert_player_fixture($info, $fixture_date);
     }
 
     foreach my $player (@$subs) {
@@ -1074,7 +1194,7 @@ sub _process_team_info($self, $fixture_id, $team_id, $fixture_data, $team_info) 
             red_card    => $red || 0,
         };
 
-        $self->_insert_player_fixture($info);
+        $self->_insert_player_fixture($info, $fixture_date);
     }
 
     return 1;
@@ -1094,19 +1214,7 @@ sub _get_api_info_and_store($self, $player_id) {
 }
 
 sub _get_teams($self, $id) {
-    my ($stmt, @bind) = $self->sqla->select(
-        -columns  => 't.name',
-        -from     => [ -join => qw(
-            players_fixtures|pf <=>{f.id=pf.fixture_id} fixtures|f
-                                <=>{pf.team_id=t.id}    teams|t
-        )],
-        -where    => {
-            player_id => $id,
-        },
-    );
-
-    my ($names) = $self->dbh->selectcol_arrayref($stmt, undef, @bind);
-    return $names;
+    return $self->get_player_teams($id);
 }
 
 sub _get_name($self, $id) {
@@ -1279,7 +1387,7 @@ sub _has_card($self, $player_id, $booking_info, $colour) {
            ($booking_info->{$player_id} eq $colour . "_CARD");
 }
 
-sub _insert_player_fixture($self, $info) {
+sub _insert_player_fixture($self, $info, $fixture_date) {
     my ($stmt, @bind) = $self->sqla->select(
         -columns => 'id',
         -from    => 'players_fixtures',
@@ -1300,6 +1408,10 @@ sub _insert_player_fixture($self, $info) {
         );
 
         ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+        $self->update_player_team(
+            $info->{player_id}, $info->{team_id}, $fixture_date
+        );
     }
 
     return $id;

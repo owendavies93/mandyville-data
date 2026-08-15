@@ -12,6 +12,7 @@ use Mandyville::Fixtures;
 use Mandyville::Teams;
 use Mandyville::Utils qw(current_season debug msg);
 
+use DateTime;
 use SQL::Abstract::More;
 use Try::Tiny;
 
@@ -71,6 +72,7 @@ foreach my $fpl_team (@$fpl_teams) {
 
 my $player_data = $fpl_api->players;
 my $season = current_season();
+my $today = DateTime->today->ymd;
 
 $players->deactivate_fpl_season($season);
 
@@ -86,8 +88,14 @@ foreach my $player (@$player_data) {
         my $team_id = $fpl_team_map{$player->{team}};
         $players->add_fpl_season_info(
             $db_result->{id}, $season, $player->{id},
-            $player->{element_type}, $starting_price, $team_id
+            $player->{element_type}, $starting_price
         );
+
+        if (defined $team_id) {
+            $players->update_player_team(
+                $db_result->{id}, $team_id, $today
+            );
+        }
 
         $players->remove_unmatched_fpl_player($player->{code}, $season);
 
