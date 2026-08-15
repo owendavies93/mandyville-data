@@ -97,28 +97,21 @@ use Mandyville::Fixtures;
         $comp_data->{id}, $home_team_id, $away_team_id, $season, $match_info
     );
 
-    cmp_ok( $fixture_data->{id}, '==', $id, 'get_or_insert: returns same ID' );
+    cmp_ok( $fixture_data->{id}, '==', $id,
+            'get_or_insert: same date returns same ID' );
 
     ok( $fixture_data->{home_team_goals},
         'get_or_insert: match data inserted for existing fixture' );
 
-    $match_info->{fixture_date} = '2018-02-01';
-
-    $fixture_data = $fixtures->get_or_insert(
-        $comp_data->{id}, $home_team_id, $away_team_id, $season, $match_info
+    # A second meeting between the same teams in the same season must be
+    # stored separately rather than overwriting the first.
+    my $second = $fixtures->get_or_insert(
+        $comp_data->{id}, $home_team_id, $away_team_id, $season,
+        { fixture_date => '2018-02-01' },
     );
 
-    cmp_ok( $fixture_data->{fixture_date}, 'ne', $fixture_date,
-            'get_or_insert: fixture date correctly updated' );
-
-    # Re-processing with a changed date but no score must not wipe goals
-    $match_info = {
-        fixture_date => '2018-03-01',
-    };
-
-    $fixtures->get_or_insert(
-        $comp_data->{id}, $home_team_id, $away_team_id, $season, $match_info
-    );
+    cmp_ok( $second->{id}, '!=', $id,
+            'get_or_insert: second meeting gets its own row' );
 
     my ($stored_htg) = $dbh->rw_db_handle->selectrow_array(
         'SELECT home_team_goals FROM fixtures WHERE id = ?',
@@ -126,7 +119,37 @@ use Mandyville::Fixtures;
     );
 
     cmp_ok( $stored_htg, '==', 1,
+            'get_or_insert: first meeting goals preserved' );
+
+    # Re-processing the first meeting with its date but no score must not
+    # wipe its goals.
+    $match_info = {
+        fixture_date => $fixture_date,
+    };
+
+    $fixture_data = $fixtures->get_or_insert(
+        $comp_data->{id}, $home_team_id, $away_team_id, $season, $match_info
+    );
+
+    cmp_ok( $fixture_data->{id}, '==', $id,
+            'get_or_insert: re-processing same date returns same ID' );
+
+    ($stored_htg) = $dbh->rw_db_handle->selectrow_array(
+        'SELECT home_team_goals FROM fixtures WHERE id = ?',
+        undef, $id
+    );
+
+    cmp_ok( $stored_htg, '==', 1,
             'get_or_insert: goals preserved when re-processing without a score' );
+
+    # A rescheduled, unplayed fixture should update in place.
+    $fixture_data = $fixtures->get_or_insert(
+        $comp_data->{id}, $home_team_id, $away_team_id, $season,
+        { fixture_date => '2018-03-01' },
+    );
+
+    cmp_ok( $fixture_data->{id}, '==', $second->{id},
+            'get_or_insert: rescheduled unplayed fixture updates in place' );
 
     $teams->get_or_insert_team_comp($home_team_id, $season, $comp_data->{id});
     $teams->get_or_insert_team_comp($away_team_id, $season, $comp_data->{id});
@@ -134,10 +157,21 @@ use Mandyville::Fixtures;
     dies_ok { $fixtures->find_fixture_from_understat_data }
               'find_fixture_from_understat_data: dies without args';
 
+    cmp_ok( $fixtures->find_fixture(
+            $comp_data->{id}, $home_team_id, $away_team_id, $season,
+            $fixture_date), '==', $id,
+            'find_fixture: returns correct ID by date' );
+
+    ok( !defined $fixtures->find_fixture(
+            $comp_data->{id}, $home_team_id, $away_team_id, $season,
+            '2018-12-31'),
+        'find_fixture: returns undef for unknown date' );
+
     my $understat_data = {
         h_team => $home,
         a_team => $away,
         season => 2018,
+        date   => $fixture_date,
     };
 
     my $fixture_id = $fixtures->find_fixture_from_understat_data(
@@ -146,6 +180,15 @@ use Mandyville::Fixtures;
 
     cmp_ok( $fixture_id, '==', $id,
             'find_fixture_from_understat_data: returns correct ID' );
+
+    $understat_data->{date} = '2018-03-01';
+
+    $fixture_id = $fixtures->find_fixture_from_understat_data(
+        $understat_data, [$comp_data->{id}]
+    );
+
+    cmp_ok( $fixture_id, '==', $second->{id},
+            'find_fixture_from_understat_data: disambiguates by date' );
 
     $understat_data->{h_team} = 'Liverpool';
 

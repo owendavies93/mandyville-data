@@ -111,6 +111,39 @@ sub new($class, $options) {
     return $self;
 }
 
+=item find_fixture ( COMP_ID, HOME_ID, AWAY_ID, SEASON, FIXTURE_DATE )
+
+  Looks up the fixture with the given C<COMP_ID>, C<HOME_ID>,
+  C<AWAY_ID> and C<SEASON>. When C<FIXTURE_DATE> is provided, it is
+  also used to disambiguate meetings between the same two teams in the
+  same season.
+
+  Returns the fixture database ID, or C<undef> if no matching fixture
+  is found. Unlike C<get_or_insert>, this never inserts a fixture.
+
+=cut
+
+sub find_fixture($self, $comp_id, $home_id, $away_id, $season, $fixture_date = undef) {
+    my %where = (
+        competition_id => $comp_id,
+        home_team_id   => $home_id,
+        away_team_id   => $away_id,
+        season         => $season,
+    );
+
+    $where{fixture_date} = $fixture_date if defined $fixture_date;
+
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns  => 'id',
+        -from     => 'fixtures',
+        -where    => \%where,
+        -order_by => 'id',
+    );
+
+    my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    return $id;
+}
+
 =item find_fixture_from_understat_data ( UNDERSTAT_DATA, COMPS )
 
   Attempts to find a fixture for the given C<UNDERSTAT_DATA>. Finds all
@@ -132,10 +165,10 @@ sub new($class, $options) {
   which are the set of competition IDs that fixtures are allowed to be
   from.
 
-  Returns the database ID of the fixture.
+  When multiple fixtures match, the date from C<UNDERSTAT_DATA> is used
+  to disambiguate them.
 
-  This would be a lot simpler if we stored date info with fixtures, but
-  currently we don't...
+  Returns the database ID of the fixture.
 
 =cut
 
@@ -182,9 +215,9 @@ sub find_fixture_from_understat_data($self, $understat_data, $comps) {
         return;
     }
 
-    my $fixture = $self->get_or_insert(
-        $matching_comp_id, $matching_home_id, $matching_away_id, $season, {});
-    return $fixture->{id};
+    return $self->find_fixture(
+        $matching_comp_id, $matching_home_id, $matching_away_id,
+        $season, $understat_data->{date});
 }
 
 =item get_or_insert ( COMP_ID, HOME_ID, AWAY_ID, SEASON, MATCH_INFO )
@@ -200,6 +233,13 @@ sub find_fixture_from_understat_data($self, $understat_data, $comps) {
   fixture is missing information, and we therefore only know the date,
   teams and season.
 
+  When C<MATCH_INFO> contains a C<fixture_date>, that date is used to
+  disambiguate between multiple meetings of the same two teams in the
+  same competition and season. If no fixture matches that date but a
+  single unplayed fixture (one with no goals) exists for the same teams
+  and season, that fixture is treated as a rescheduling and is updated
+  in place rather than a duplicate being inserted.
+
   C<MATCH_INFO> is a hashref used for insertion, which can contain
   the C<winning_team_id>, C<home_team_goals>, C<away_team_goals> and
   C<fixture_date> attributes. All attributes are optional except for
@@ -210,19 +250,47 @@ sub find_fixture_from_understat_data($self, $understat_data, $comps) {
 =cut
 
 sub get_or_insert($self, $comp_id, $home_id, $away_id, $season, $match_info) {
+    my $base_where = {
+        competition_id => $comp_id,
+        home_team_id   => $home_id,
+        away_team_id   => $away_id,
+        season         => $season,
+    };
+
+    my $exact_where = { %$base_where };
+    $exact_where->{fixture_date} = $match_info->{fixture_date}
+        if defined $match_info->{fixture_date};
+
     my ($stmt, @bind) = $self->sqla->select(
         -columns => [ qw(id fixture_date home_team_goals) ],
         -from    => 'fixtures',
-        -where   => {
-            competition_id => $comp_id,
-            home_team_id   => $home_id,
-            away_team_id   => $away_id,
-            season         => $season,
-        }
+        -where   => $exact_where,
     );
 
     my ($id, $f_date, $saved_htg) =
         $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    # A rescheduled fixture (same teams, competition and season, but a
+    # new date and no result yet) should update the existing scheduled
+    # row in place rather than create a duplicate. Only do this when
+    # there's exactly one unplayed candidate, so we never guess between
+    # multiple meetings.
+    if (!defined $id && defined $match_info->{fixture_date}) {
+        ($stmt, @bind) = $self->sqla->select(
+            -columns  => 'id',
+            -from     => 'fixtures',
+            -where    => { %$base_where, home_team_goals => undef },
+            -order_by => 'id',
+        );
+
+        my $unplayed = $self->dbh->selectall_arrayref($stmt, undef, @bind);
+
+        if (scalar @$unplayed == 1) {
+            ($id) = @{ $unplayed->[0] };
+            $f_date    = undef;
+            $saved_htg = undef;
+        }
+    }
 
     if (!defined $id) {
         croak "missing fixture_date attribute in match_info param"
