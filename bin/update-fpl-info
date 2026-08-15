@@ -57,6 +57,18 @@ my $players = Mandyville::Players->new({
 
 my $fpl_api = Mandyville::API::FPL->new;
 
+my $fpl_teams = $fpl_api->teams;
+my %fpl_team_map;
+
+foreach my $fpl_team (@$fpl_teams) {
+    my $matched = $teams->find_from_name($fpl_team->{name});
+    if (scalar @$matched == 1) {
+        $fpl_team_map{$fpl_team->{id}} = $matched->[0];
+    } else {
+        debug "Could not resolve FPL team: $fpl_team->{name}";
+    }
+}
+
 my $player_data = $fpl_api->players;
 my $season = current_season();
 
@@ -71,9 +83,10 @@ foreach my $player (@$player_data) {
         my $db_result = $players->find_player_by_fpl_info($player);
         $players->update_fpl_id($db_result->{id}, $player->{code});
         my $starting_price = $player->{now_cost} - $player->{cost_change_start};
+        my $team_id = $fpl_team_map{$player->{team}};
         $players->add_fpl_season_info(
             $db_result->{id}, $season, $player->{id},
-            $player->{element_type}, $starting_price
+            $player->{element_type}, $starting_price, $team_id
         );
 
         $players->remove_unmatched_fpl_player($player->{code}, $season);

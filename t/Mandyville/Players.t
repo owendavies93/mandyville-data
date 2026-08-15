@@ -461,30 +461,44 @@ use Mandyville::Players;
     dies_ok { $players->add_fpl_season_info }
               'add_fpl_season_info: dies without args';
 
-    my $info_id = $players->add_fpl_season_info($player_id, 2020, 1, 1, 50);
+    my $test_team = $teams->get_or_insert('Test FC', 999);
+    my $test_team_id = $test_team->{id};
+
+    my $info_id = $players->add_fpl_season_info(
+        $player_id, 2020, 1, 1, 50, $test_team_id
+    );
 
     ok( $info_id, 'add_fpl_season_info: correctly inserts' );
 
-    my ($stored_price) = $db->rw_db_handle->selectrow_array(
-        'SELECT starting_price FROM fpl_season_info WHERE id = ?',
+    my ($stored_price, $stored_team_id) = $db->rw_db_handle->selectrow_array(
+        'SELECT starting_price, team_id FROM fpl_season_info WHERE id = ?',
         undef, $info_id
     );
 
     cmp_ok( $stored_price, '==', 5.0,
             'add_fpl_season_info: starting_price stored correctly' );
 
-    my $new_id = $players->add_fpl_season_info($player_id, 2020, 1, 1, 60);
+    cmp_ok( $stored_team_id, '==', $test_team_id,
+            'add_fpl_season_info: team_id stored correctly' );
+
+    my $other_team = $teams->get_or_insert('Other FC', 998);
+    my $new_id = $players->add_fpl_season_info(
+        $player_id, 2020, 1, 1, 60, $other_team->{id}
+    );
 
     cmp_ok( $info_id, '==', $new_id,
             'add_fpl_season_info: correctly returns same id' );
 
-    ($stored_price) = $db->rw_db_handle->selectrow_array(
-        'SELECT starting_price FROM fpl_season_info WHERE id = ?',
+    ($stored_price, $stored_team_id) = $db->rw_db_handle->selectrow_array(
+        'SELECT starting_price, team_id FROM fpl_season_info WHERE id = ?',
         undef, $new_id
     );
 
     cmp_ok( $stored_price, '==', 5.0,
             'add_fpl_season_info: starting_price not overwritten on update' );
+
+    cmp_ok( $stored_team_id, '==', $test_team_id,
+            'add_fpl_season_info: team_id not overwritten on update' );
 
     $players->deactivate_fpl_season(2020);
 
@@ -496,7 +510,9 @@ use Mandyville::Players;
     ok( !$active_after_deactivate,
         'deactivate_fpl_season: marks rows as inactive' );
 
-    $players->add_fpl_season_info($player_id, 2020, 1, 1, 50);
+    $players->add_fpl_season_info(
+        $player_id, 2020, 1, 1, 50, $test_team_id
+    );
 
     my ($active_after_readd) = $db->rw_db_handle->selectrow_array(
         'SELECT active FROM fpl_season_info WHERE id = ?',

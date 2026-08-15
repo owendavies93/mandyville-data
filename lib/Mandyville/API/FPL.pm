@@ -72,6 +72,17 @@ sub players($self) {
     return $bootstrap->{elements};
 }
 
+=item teams
+
+  Fetch the teams in the game for the current season.
+
+=cut
+
+sub teams($self) {
+    my $bootstrap = $self->get('bootstrap-static/');
+    return $bootstrap->{teams};
+}
+
 =back
 
 =cut

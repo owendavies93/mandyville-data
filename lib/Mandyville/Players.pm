@@ -199,7 +199,7 @@ sub deactivate_fpl_season($self, $season) {
     return $self->dbh->do($stmt, undef, @bind);
 }
 
-=item add_fpl_season_info ( PLAYER_ID, SEASON, FPL_ID, POSITION_ID, STARTING_PRICE )
+=item add_fpl_season_info ( PLAYER_ID, SEASON, FPL_ID, POSITION_ID, STARTING_PRICE, TEAM_ID )
 
   Add the FPL season info for the given C<PLAYER_ID>. Checks for the
   season info before inserting. Returns the ID of the season info
@@ -209,13 +209,13 @@ sub deactivate_fpl_season($self, $season) {
   C<POSITION_ID> is the entity type ID of the player (a number between
   1 and 4). C<STARTING_PRICE> is the integer price from the FPL API
   (i.e. the actual price multiplied by 10). It will be stored as the
-  actual decimal value.
+  actual decimal value. C<TEAM_ID> is the mandyville database team ID.
 
 =cut
 
-sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id, $starting_price) {
+sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id, $starting_price, $team_id) {
     my ($stmt, @bind) = $self->sqla->select(
-        -columns => [qw(id starting_price)],
+        -columns => [qw(id starting_price team_id)],
         -from    => 'fpl_season_info',
         -where   => {
             player_id => $player_id,
@@ -223,12 +223,16 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id, $star
         },
     );
 
-    my ($id, $existing_price) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    my ($id, $existing_price, $existing_team_id) =
+        $self->dbh->selectrow_array($stmt, undef, @bind);
 
     if (defined $id) {
         my $set = { active => 1 };
         if (!defined $existing_price && defined $starting_price) {
             $set->{starting_price} = $starting_price / 10;
+        }
+        if (!defined $existing_team_id && defined $team_id) {
+            $set->{team_id} = $team_id;
         }
 
         ($stmt, @bind) = $self->sqla->update(
@@ -260,6 +264,10 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id, $star
 
         if (defined $starting_price) {
             $values->{starting_price} = $starting_price / 10;
+        }
+
+        if (defined $team_id) {
+            $values->{team_id} = $team_id;
         }
 
         ($stmt, @bind) = $self->sqla->insert(
