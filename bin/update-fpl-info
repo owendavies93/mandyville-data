@@ -83,7 +83,7 @@ foreach my $player (@$player_data) {
     try {
         msg "Processing $first $last";
         my $db_result = $players->find_player_by_fpl_info($player);
-        $players->update_fpl_id($db_result->{id}, $player->{code});
+        my $fpl_id_updated = $players->update_fpl_id($db_result->{id}, $player->{code});
         my $starting_price = $player->{now_cost} - $player->{cost_change_start};
         my $team_id = $fpl_team_map{$player->{team}};
         $players->add_fpl_season_info(
@@ -92,9 +92,15 @@ foreach my $player (@$player_data) {
         );
 
         if (defined $team_id) {
-            $players->update_player_team(
-                $db_result->{id}, $team_id, $today
-            );
+            # Only update the team if this is the correct FPL match.
+            # update_fpl_id returns 0 when fpl_id is already set, which
+            # means find_player_by_fpl_info may have returned a wrong
+            # match (a different player with a similar name).
+            if ($fpl_id_updated || $players->get_fpl_id($db_result->{id}) == $player->{code}) {
+                $players->update_player_team(
+                    $db_result->{id}, $team_id, $today
+                );
+            }
         }
 
         $players->remove_unmatched_fpl_player($player->{code}, $season);

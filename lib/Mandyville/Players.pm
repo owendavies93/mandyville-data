@@ -697,6 +697,24 @@ sub get_or_insert($self, $football_data_id, $player_info) {
     };
 }
 
+=item get_fpl_id ( PLAYER_ID )
+
+  Fetch the FPL entity ID (code) for the player corresponding to
+  C<PLAYER_ID>. Returns undef if no FPL ID is set.
+
+=cut
+
+sub get_fpl_id($self, $player_id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'fpl_id',
+        -from    => 'players',
+        -where   => { id => $player_id },
+    );
+
+    my ($fpl_id) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    return $fpl_id;
+}
+
 =item get_team_for_player_fixture ( PLAYER_ID, FIXTURE_ID )
 
   Fetch the team ID for the given C<PLAYER_ID> and C<FIXTURE_ID>
