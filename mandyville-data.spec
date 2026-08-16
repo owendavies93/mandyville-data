@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    14%{?dist}
+Release:    15%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -70,6 +70,10 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Sun Aug 16 2026 Owen Davies <owen@odavi.es> - 0.2-15
+- Don't override team assignments to previously assigned players
+- Update agents.md
+
 * Sun Aug 16 2026 Owen Davies <owen@odavi.es> - 0.2-14
 - Move backfill script to unpackaged directory
 - Update submodule
