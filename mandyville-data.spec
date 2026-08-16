@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    13%{?dist}
+Release:    14%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -70,6 +70,18 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Sun Aug 16 2026 Owen Davies <owen@odavi.es> - 0.2-14
+- Move backfill script to unpackaged directory
+- Update submodule
+- Fix conflicting fixtures in the same season
+- Update submodule
+- Add players_teams tracking, add national team tracking
+- Update submodule
+- Store starting FPL teams for the current season
+- Update submodule
+- Get season starting prices for FPL players
+- Set active flag on fpl_season_info during gameweek backfill
+
 * Wed Aug 12 2026 Owen Davies <owen@odavi.es> - 0.2-13
 - Get fixture team performance data from understat
 
