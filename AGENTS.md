@@ -24,3 +24,4 @@ Perl project for fetching, storing and managing football data for mandyville. In
 - Follow existing Perl conventions in the codebase
 - All modules must pass `perlcritic` (see `t/criticrc` for config)
 - All modules must have POD documentation (checked by `t/podcheck.t` and `t/podcoverage.t`)
+- Any scripts for testing and backfilling data should live in the unpackaged/ directory. Crons should be in the bin/ directory
