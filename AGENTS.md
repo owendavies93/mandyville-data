@@ -8,6 +8,11 @@ Perl project for fetching, storing and managing football data for mandyville. In
 
 - `lib/Mandyville/` — Core modules (API clients, database, competitions, fixtures, players, etc.)
 - `bin/` — Executable scripts for data updates
+  - `update-fpl-draft` and `update-fpl-availability` sync FPL Draft league state
+    (ownership, waivers, lineups, availability) via the public draft API. They are
+    backed by `lib/Mandyville/API/FPLDraft.pm` (API client) and
+    `lib/Mandyville/FPLDraft.pm` (storage), and write change-only ranges into
+    the `fpl_draft_*` and `fpl_player_availability` tables.
 - `t/` — Tests (run with `prove -lr t`)
 - `etc/` — Configuration files
 - `cpanfile` — Perl dependencies

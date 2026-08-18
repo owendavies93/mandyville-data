@@ -13,8 +13,19 @@ database:
 football_data:
   api_token: 'changeme'
 
+# FPL Draft leagues to keep in sync. C<id> is the draft league id and
+# C<entry> is your own global entry id in that league (used to mark the
+# C<is_mine> flag). Add one entry per league; replace the example values
+# on each deployment.
+fpl_draft:
+  leagues:
+    - id: 12345
+      entry: 678
+
 healthcheck:
   update-competiton-data: 'changeme'
   update-fixture-data: 'changeme'
   update-fpl-info: 'changeme'
   update-understat-info: 'changeme'
+  update-fpl-draft: 'changeme'
+  update-fpl-availability: 'changeme'

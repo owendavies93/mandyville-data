@@ -1,0 +1,71 @@
+{
+  "league": {
+    "id": 1,
+    "name": "Test Draft",
+    "scoring": "h",
+    "transaction_mode": "waivers",
+    "trades": "a",
+    "draft_dt": "2026-08-01T18:00:00Z",
+    "start_event": 1,
+    "stop_event": 1
+  },
+  "league_entries": [
+    {
+      "id": 101,
+      "entry_id": 1001,
+      "entry_name": "Team A",
+      "player_first_name": "A",
+      "player_last_name": "One",
+      "short_name": "A1",
+      "waiver_pick": 1
+    },
+    {
+      "id": 102,
+      "entry_id": 1002,
+      "entry_name": "Team B",
+      "player_first_name": "B",
+      "player_last_name": "Two",
+      "short_name": "B2",
+      "waiver_pick": 2
+    }
+  ],
+  "matches": [
+    {
+      "event": 1,
+      "league_entry_1": 101,
+      "league_entry_2": 102,
+      "league_entry_1_points": 0,
+      "league_entry_2_points": 0,
+      "finished": false,
+      "started": false,
+      "winning_league_entry": null,
+      "winning_method": null
+    }
+  ],
+  "standings": [
+    {
+      "league_entry": 101,
+      "rank": 1,
+      "last_rank": null,
+      "points_for": 0,
+      "points_against": 0,
+      "matches_played": 0,
+      "matches_won": 0,
+      "matches_drawn": 0,
+      "matches_lost": 0,
+      "total": 0
+    },
+    {
+      "league_entry": 102,
+      "rank": 2,
+      "last_rank": null,
+      "points_for": 0,
+      "points_against": 0,
+      "matches_played": 0,
+      "matches_won": 0,
+      "matches_drawn": 0,
+      "matches_lost": 0,
+      "total": 0
+    }
+  ]
+}

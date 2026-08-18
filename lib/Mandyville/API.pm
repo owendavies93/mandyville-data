@@ -30,10 +30,11 @@ use Try::Tiny;
 
 =cut
 
-const my $EXPIRY_TIME => 60 / 24 / 60; # 60 minutes in days
+const my $DEFAULT_EXPIRY => 60 / 24 / 60; # 60 minutes in days
 
-has 'cache' => sub { {} };
-has 'ua'    => sub { Mojo::UserAgent->new->connect_timeout(20) };
+has 'cache'  => sub { {} };
+has 'ua'     => sub { Mojo::UserAgent->new->connect_timeout(20) };
+has 'expiry' => sub { $DEFAULT_EXPIRY }; # days a cached response stays fresh
 
 =head1 METHODS
 
@@ -43,9 +44,11 @@ has 'ua'    => sub { Mojo::UserAgent->new->connect_timeout(20) };
 
   Get the JSON response from C<PATH>. First check the cache to see
   if it exists in there. If the exact path has been fetched by this
-  instance in the past hour, return the cached JSON from disk. Else,
-  call _rate_limit(), call _get(), and stores the response in the
-  cache on disk. Finally, decodes and returns the JSON.
+  instance more recently than the C<expiry> attribute allows (defaults
+  to one hour), return the cached JSON from disk. Else, call
+  _rate_limit(), call _get(), and stores the response in the cache on
+  disk. Finally, decodes and returns the JSON. Subclasses may override
+  the C<expiry> attribute when a shorter cache lifetime is required.
 
   C<HEADERS> is an optional hashref of extra HTTP headers to include
   in the request.
@@ -55,7 +58,7 @@ has 'ua'    => sub { Mojo::UserAgent->new->connect_timeout(20) };
 sub get($self, $path, $headers={}) {
     if (defined $self->cache->{$path}) {
         my $cache_path = $self->cache->{$path};
-        if (-f $cache_path && -M $cache_path <= $EXPIRY_TIME) {
+        if (-f $cache_path && -M $cache_path <= $self->expiry) {
             my $json = Mojo::File->new($cache_path)->slurp;
             return decode_json($json);
         }

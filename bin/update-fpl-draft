@@ -1,0 +1,75 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict;
+
+use Mandyville::Config qw(config);
+use Mandyville::FPLDraft;
+use Mandyville::Utils qw(current_season msg);
+
+use Getopt::Long;
+use Try::Tiny;
+
+binmode(STDOUT, ':encoding(UTF-8)');
+binmode(STDERR, ':encoding(UTF-8)');
+
+my ($dry_run, $league, $season);
+GetOptions(
+    'dry-run'  => \$dry_run,
+    'league=i' => \$league,
+    'season=i' => \$season,
+) or die "Invalid options";
+
+my $config = config();
+
+$season //= current_season();
+
+my $leagues = [];
+if (defined $league) {
+    # Single-league override, handy for ad-hoc runs and debugging. The
+    # tracked entry is left unset, so no is_mine flag is applied.
+    $leagues = [{ id => $league, entry => undef }];
+} else {
+    my $draft_config = $config->{fpl_draft} // {};
+    my $configured   = $draft_config->{leagues} // [];
+    foreach my $l (@$configured) {
+        push @$leagues, { id => $l->{id}, entry => $l->{entry} };
+    }
+
+    die 'No FPL draft leagues configured (fpl_draft.leagues in config) '
+        . 'and no -league flag given' unless @$leagues;
+}
+
+my $fpl_draft = Mandyville::FPLDraft->new({
+    leagues => $leagues,
+    season  => $season,
+    dry_run => $dry_run,
+});
+
+try {
+    my $changes = $fpl_draft->sync;
+    msg "Done! $changes changes" . ($dry_run ? ' (dry run)' : '');
+} catch {
+    die "update-fpl-draft failed: $_";
+};
+
+=head1 NAME
+
+  update-fpl-draft
+
+=head1 DESCRIPTION
+
+  Fetches the current state of the configured FPL Draft leagues and
+  stores it in the database: league configuration, managers, the draft
+  picks, ownership of every player, waiver order, transactions, fixtures,
+  standings, per-gameweek lineups and the draft element to player
+  mapping.
+
+  Ownership and waiver order are stored as change-only ranges, so each
+  run only appends rows when something actually changed.
+
+  With C<--dry-run>, nothing is written and the changes that would be
+  made are logged to STDERR instead. C<--league> overrides the configured
+  leagues with a single league id. C<--season> overrides the season,
+  which defaults to the current season.
+
+=cut

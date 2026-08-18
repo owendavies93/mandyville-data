@@ -1,0 +1,24 @@
+{
+  "choices": [
+    {
+      "index": 1,
+      "round": 1,
+      "pick": 1,
+      "entry": 1001,
+      "element": 10,
+      "choice_time": "2026-08-01T18:05:00Z",
+      "was_auto": false,
+      "draft": 1
+    },
+    {
+      "index": 2,
+      "round": 1,
+      "pick": 2,
+      "entry": 1002,
+      "element": 20,
+      "choice_time": "2026-08-01T18:06:00Z",
+      "was_auto": true,
+      "draft": 1
+    }
+  ]
+}

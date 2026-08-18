@@ -1,0 +1,50 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict;
+
+use Mandyville::FPLDraft;
+use Mandyville::Utils qw(current_season msg);
+
+use Getopt::Long;
+use Try::Tiny;
+
+binmode(STDOUT, ':encoding(UTF-8)');
+binmode(STDERR, ':encoding(UTF-8)');
+
+my ($dry_run, $season);
+GetOptions(
+    'dry-run'  => \$dry_run,
+    'season=i' => \$season,
+) or die "Invalid options";
+
+$season //= current_season();
+
+my $fpl_draft = Mandyville::FPLDraft->new({
+    season  => $season,
+    dry_run => $dry_run,
+});
+
+try {
+    my $changes = $fpl_draft->sync_availability;
+    msg "Done! $changes changes" . ($dry_run ? ' (dry run)' : '');
+} catch {
+    die "update-fpl-availability failed: $_";
+};
+
+=head1 NAME
+
+  update-fpl-availability
+
+=head1 DESCRIPTION
+
+  Fetches per-player availability data for the current season from the
+  FPL Draft bootstrap and stores it in C<fpl_player_availability> as
+  change-only ranges: status (available, injured, suspended, ...),
+  chances of playing this and next round, injury news, expected return
+  date and draft rank.
+
+  With C<--dry-run>, nothing is written and the changes that would be
+  made are logged to STDERR instead. C<--season> overrides the season,
+  which defaults to the current season.
+
+=cut

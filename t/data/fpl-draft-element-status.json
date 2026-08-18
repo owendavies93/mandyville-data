@@ -1,0 +1,8 @@
+{
+  "element_status": [
+    { "element": 10, "owner": 1001, "status": "o", "in_accepted_trade": false },
+    { "element": 20, "owner": 1002, "status": "o", "in_accepted_trade": false },
+    { "element": 30, "owner": null, "status": "a", "in_accepted_trade": false },
+    { "element": 40, "owner": null, "status": "a", "in_accepted_trade": false }
+  ]
+}

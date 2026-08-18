@@ -1,0 +1,1 @@
+30 * * * * mandyville /usr/bin/update-fpl-availability 2>&1 | ts '[\%Y-\%m-\%d \%H:\%M:\%S]' >> /var/log/mandyville/update-fpl-availability.log && send-healthcheck --name update-fpl-availability
