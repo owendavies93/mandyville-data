@@ -1,0 +1,57 @@
+{
+  "elements": [
+    {
+      "id": 10,
+      "code": 100,
+      "status": "a",
+      "news": "",
+      "news_added": null,
+      "news_return": null,
+      "chance_of_playing_this_round": 100,
+      "chance_of_playing_next_round": 100,
+      "draft_rank": 1
+    },
+    {
+      "id": 20,
+      "code": 200,
+      "status": "a",
+      "news": "",
+      "news_added": null,
+      "news_return": null,
+      "chance_of_playing_this_round": null,
+      "chance_of_playing_next_round": null,
+      "draft_rank": 2
+    },
+    {
+      "id": 30,
+      "code": 300,
+      "status": "i",
+      "news": "Ankle injury - unknown return date",
+      "news_added": "2026-08-18T10:00:00Z",
+      "news_return": "2026-09-01",
+      "chance_of_playing_this_round": 0,
+      "chance_of_playing_next_round": 0,
+      "draft_rank": 3
+    },
+    {
+      "id": 40,
+      "code": 999,
+      "status": "a",
+      "news": "",
+      "news_added": null,
+      "news_return": null,
+      "chance_of_playing_this_round": null,
+      "chance_of_playing_next_round": null,
+      "draft_rank": 4
+    }
+  ],
+  "events": {
+    "data": [
+      {
+        "id": 1,
+        "deadline_time": "2020-08-21T17:30:00Z"
+      }
+    ]
+  },
+  "settings": {}
+}

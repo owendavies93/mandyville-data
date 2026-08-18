@@ -1,0 +1,15 @@
+{
+  "transactions": [
+    {
+      "id": 5001,
+      "event": 1,
+      "kind": "f",
+      "result": "a",
+      "added": "2026-08-22T10:00:00Z",
+      "priority": null,
+      "subject": 1001,
+      "element_in": 30,
+      "element_out": 10
+    }
+  ]
+}

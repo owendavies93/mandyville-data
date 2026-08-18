@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    15%{?dist}
+Release:    16%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -49,6 +49,8 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 %{_bindir}/send-healthcheck
 %{_bindir}/update-competition-data
 %{_bindir}/update-fixture-data
+%{_bindir}/update-fpl-availability
+%{_bindir}/update-fpl-draft
 %{_bindir}/update-fpl-info
 %{_bindir}/update-understat-ids
 %{_bindir}/update-understat-info
@@ -56,6 +58,8 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 # Crons
 %{_sysconfdir}/cron.d/update-competition-data
 %{_sysconfdir}/cron.d/update-fixture-data
+%{_sysconfdir}/cron.d/update-fpl-availability
+%{_sysconfdir}/cron.d/update-fpl-draft
 %{_sysconfdir}/cron.d/update-fpl-info
 %{_sysconfdir}/cron.d/update-understat-info
 
@@ -70,6 +74,10 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Mon Aug 18 2026 Owen Davies <owen@odavi.es> - 0.2-16
+- Add crons for FPL Draft league state and player availability
+- Update submodule
+
 * Sun Aug 16 2026 Owen Davies <owen@odavi.es> - 0.2-15
 - Don't override team assignments to previously assigned players
 - Update agents.md
