@@ -129,6 +129,11 @@ sub sync($self) {
   playing, draft rank) for every element. Returns the number of changes
   written.
 
+  Draft rank is stored but deliberately excluded from change detection:
+  the game recalculates it constantly, and tracking it would close and
+  reopen a range for most elements on every run. The stored rank is
+  therefore the value as at the last material change, not live.
+
 =cut
 
 sub sync_availability($self) {
@@ -173,7 +178,7 @@ sub sync_availability($self) {
             $changed ||= $self->_differs($cur->{chance_of_playing_next}, $e->{chance_of_playing_next_round});
             $changed ||= $self->_differs($cur->{news}, $e->{news});
             $changed ||= $self->_differs($cur->{news_return}, $e->{news_return});
-            $changed ||= $self->_differs($cur->{draft_rank}, $e->{draft_rank});
+            # draft_rank is intentionally not compared here; see the POD.
 
             if ($changed) {
                 $self->_apply(

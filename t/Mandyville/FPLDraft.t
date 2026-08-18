@@ -314,6 +314,18 @@ sub _mock_api {
         'SELECT COUNT(*) FROM fpl_player_availability WHERE season = ?', $SEASON
     );
     is( $total, 5, 'availability: five rows total after change' );
+
+    # The game reshuffles draft rank constantly, so a rank-only change
+    # must not close and reopen the range.
+    $bootstrap->{elements}[2]{draft_rank} = 99;
+
+    my $third = $fpl_draft->sync_availability;
+    is( $third, 0, 'availability: draft rank change alone is not a change' );
+
+    my $unchanged = _scalar( $dbh,
+        'SELECT COUNT(*) FROM fpl_player_availability WHERE season = ?', $SEASON
+    );
+    is( $unchanged, 5, 'availability: no new rows for a rank-only change' );
 }
 
 done_testing();
