@@ -74,7 +74,7 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
-* Mon Aug 18 2026 Owen Davies <owen@odavi.es> - 0.2-16
+* Tue Aug 18 2026 Owen Davies <owen@odavi.es> - 0.2-16
 - Add crons for FPL Draft league state and player availability
 - Update submodule
 
