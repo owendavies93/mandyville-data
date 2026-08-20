@@ -13,6 +13,12 @@ Perl project for fetching, storing and managing football data for mandyville. In
     backed by `lib/Mandyville/API/FPLDraft.pm` (API client) and
     `lib/Mandyville/FPLDraft.pm` (storage), and write change-only ranges into
     the `fpl_draft_*` and `fpl_player_availability` tables.
+  - The API always returns a null `news_return`: the expected return date is
+    only given in the free text of `news` ("Expected back 22 Aug", "Suspended
+    until 6 Sep"), so it is parsed out there. Consumers treat a missing return
+    date as an open-ended absence, so new news wordings must be added to
+    `_parse_news_return`. Use `unpackaged/backfill-news-return` to correct
+    stored rows in place afterwards.
 - `t/` — Tests (run with `prove -lr t`)
 - `etc/` — Configuration files
 - `cpanfile` — Perl dependencies

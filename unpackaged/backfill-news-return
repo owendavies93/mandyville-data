@@ -1,0 +1,32 @@
+#!/usr/bin/env perl
+
+# Fill in fpl_player_availability.news_return for rows written before the
+# expected return date was parsed out of the news text. The FPL API leaves
+# its own news_return field null, so every row stored up to that point has
+# an open-ended absence, which reads as "out for the rest of the season" to
+# anything consuming the data.
+#
+# Rows are corrected in place rather than closed and reopened: the missing
+# date was our parsing omission, not a change in the player's state.
+
+use Mojo::Base -strict;
+
+use Mandyville::Database;
+use Mandyville::FPLDraft;
+use Mandyville::Utils qw(msg);
+
+use Getopt::Long;
+
+my $dry_run;
+GetOptions(
+    'dry-run' => \$dry_run,
+) or die "Invalid options";
+
+my $fpl_draft = Mandyville::FPLDraft->new({
+    dbh     => Mandyville::Database->new->rw_db_handle(),
+    dry_run => $dry_run,
+});
+
+my $changes = $fpl_draft->backfill_news_return;
+
+msg "Done! $changes rows updated" . ($dry_run ? ' (dry run)' : '');

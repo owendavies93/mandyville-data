@@ -43,6 +43,11 @@ try {
   chances of playing this and next round, injury news, expected return
   date and draft rank.
 
+  The expected return date is only present in the free text of the news
+  field, so it is parsed out of there and stored in C<news_return>. To
+  correct rows written before that parsing existed, see
+  C<unpackaged/backfill-news-return>.
+
   With C<--dry-run>, nothing is written and the changes that would be
   made are logged to STDERR instead. C<--season> overrides the season,
   which defaults to the current season.

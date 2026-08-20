@@ -9,6 +9,13 @@ use Mandyville::Utils qw(current_season debug msg);
 use Mojo::JSON qw(encode_json);
 use Time::Piece;
 
+# Months as they appear in FPL news strings ("Expected back 22 Aug").
+my %NEWS_MONTHS = (
+    Jan => 1, Feb => 2,  Mar => 3,  Apr => 4,
+    May => 5, Jun => 6,  Jul => 7,  Aug => 8,
+    Sep => 9, Oct => 10, Nov => 11, Dec => 12,
+);
+
 =head1 NAME
 
   Mandyville::FPLDraft - fetch and store FPL Draft state
@@ -134,6 +141,11 @@ sub sync($self) {
   reopen a range for most elements on every run. The stored rank is
   therefore the value as at the last material change, not live.
 
+  The API's own C<news_return> field is, in practice, always null: the
+  expected return date is only given in the free text of C<news>. Where
+  the API leaves it unset we parse the news instead, so consumers get a
+  usable date rather than an open-ended absence.
+
 =cut
 
 sub sync_availability($self) {
@@ -155,6 +167,11 @@ sub sync_availability($self) {
         my $element = $e->{id};
         my $player_id = $self->_player_id_for_code($e->{code});
 
+        # The API almost never sets news_return itself; fall back to the
+        # date embedded in the news text.
+        my $news_return = $e->{news_return}
+            // $self->_parse_news_return($e->{news}, $self->season);
+
         my $cur = $open{$element};
         if (!$cur) {
             $self->_apply(
@@ -166,7 +183,7 @@ sub sync_availability($self) {
                 $player_id, $element, $self->season,
                 $e->{status}, $e->{chance_of_playing_this_round},
                 $e->{chance_of_playing_next_round}, $e->{news},
-                $e->{news_added}, $e->{news_return}, $e->{draft_rank},
+                $e->{news_added}, $news_return, $e->{draft_rank},
                 "insert availability for element $element"
             );
             $changes++;
@@ -177,7 +194,7 @@ sub sync_availability($self) {
             $changed ||= $self->_differs($cur->{chance_of_playing_this}, $e->{chance_of_playing_this_round});
             $changed ||= $self->_differs($cur->{chance_of_playing_next}, $e->{chance_of_playing_next_round});
             $changed ||= $self->_differs($cur->{news}, $e->{news});
-            $changed ||= $self->_differs($cur->{news_return}, $e->{news_return});
+            $changed ||= $self->_differs($cur->{news_return}, $news_return);
             # draft_rank is intentionally not compared here; see the POD.
 
             if ($changed) {
@@ -194,7 +211,7 @@ sub sync_availability($self) {
                     $player_id, $element, $self->season,
                     $e->{status}, $e->{chance_of_playing_this_round},
                     $e->{chance_of_playing_next_round}, $e->{news},
-                    $e->{news_added}, $e->{news_return}, $e->{draft_rank},
+                    $e->{news_added}, $news_return, $e->{draft_rank},
                     "reopen availability for element $element"
                 );
                 $changes += 2;
@@ -217,6 +234,43 @@ sub sync_availability($self) {
     $self->_record_sync_run(
         undef, 'update-fpl-availability', 'bootstrap-static', $changes
     );
+
+    return $changes;
+}
+
+=item backfill_news_return
+
+  Re-parse the C<news> text of every availability row that has no
+  C<news_return> and fill the date in where one can be found. Returns the
+  number of rows updated.
+
+  Rows are corrected in place, across every season, rather than being
+  closed and reopened: an absent return date was a parsing omission on
+  our side, not a change in the player's state, so inventing a
+  transition would corrupt the history. Running this repeatedly is
+  harmless.
+
+=cut
+
+sub backfill_news_return($self) {
+    my $rows = $self->_select_all(
+        'SELECT id, season, news
+         FROM fpl_player_availability
+         WHERE news_return IS NULL AND news IS NOT NULL'
+    );
+
+    my $changes = 0;
+    foreach my $row (@$rows) {
+        my $date = $self->_parse_news_return($row->{news}, $row->{season});
+        next unless defined $date;
+
+        $self->_apply(
+            'UPDATE fpl_player_availability SET news_return = ? WHERE id = ?',
+            $date, $row->{id},
+            "backfill news_return=$date for availability row $row->{id}"
+        );
+        $changes++;
+    }
 
     return $changes;
 }
@@ -887,6 +941,33 @@ sub _insert_returning {
 }
 
 # Compare two possibly-undef values as normalised strings.
+# Pull an expected return date out of FPL news text. The game writes
+# "Expected back 22 Aug" for injuries and "Suspended until 6 Sep" for
+# bans, never including a year. Returns a YYYY-MM-DD string, or undef if
+# there's no parseable date ("Unknown return date", "75% chance of
+# playing", transfer notices, and so on).
+sub _parse_news_return($self, $news, $season) {
+    return unless defined $news && defined $season;
+    return unless $news =~ /(?:Expected \s back | Suspended \s until)
+                            \s+ (\d{1,2}) \s+ ([A-Z][a-z]{2})/x;
+
+    my ($day, $month_name) = ($1, $2);
+    my $month = $NEWS_MONTHS{$month_name};
+    return unless defined $month;
+
+    # Seasons span two calendar years: August to December belong to the
+    # season's starting year, January to July to the one after.
+    my $year = $month >= 8 ? $season : $season + 1;
+    my $ymd  = sprintf('%04d-%02d-%02d', $year, $month, $day);
+
+    # Round-trip through Time::Piece to reject impossible dates, which
+    # strptime would otherwise silently roll over into the next month.
+    my $parsed = eval { Time::Piece->strptime($ymd, '%Y-%m-%d') };
+    return unless $parsed && $parsed->ymd eq $ymd;
+
+    return $ymd;
+}
+
 sub _differs($self, $a, $b) {
     my $aa = defined $a ? $a : '';
     my $bb = defined $b ? $b : '';

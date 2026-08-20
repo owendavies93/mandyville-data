@@ -326,6 +326,84 @@ sub _mock_api {
         'SELECT COUNT(*) FROM fpl_player_availability WHERE season = ?', $SEASON
     );
     is( $unchanged, 5, 'availability: no new rows for a rank-only change' );
+
+    # The API leaves news_return null, so the expected return date has to
+    # be taken out of the news text instead.
+    $bootstrap->{elements}[1]{news} = 'Knee injury - Expected back 23 Aug';
+    $fpl_draft->sync_availability;
+
+    my $element = $bootstrap->{elements}[1]{id};
+    is( _scalar( $dbh,
+            'SELECT news_return FROM fpl_player_availability
+             WHERE season = ? AND end_time IS NULL AND fpl_draft_element = ?',
+            $SEASON, $element ),
+        '2026-08-23', 'availability: return date parsed out of the news' );
+
+    # Rows written before the news was parsed are corrected in place.
+    $dbh->do(
+        'UPDATE fpl_player_availability SET news_return = NULL WHERE season = ?',
+        undef, $SEASON
+    );
+
+    my $before = _scalar( $dbh,
+        'SELECT COUNT(*) FROM fpl_player_availability WHERE season = ?', $SEASON
+    );
+
+    my $filled = $fpl_draft->backfill_news_return;
+    is( $filled, 1, 'backfill: fills the one row with a parseable date' );
+
+    my $after = _scalar( $dbh,
+        'SELECT COUNT(*) FROM fpl_player_availability WHERE season = ?', $SEASON
+    );
+    is( $after, $before, 'backfill: corrects in place, opening no new rows' );
+
+    is( _scalar( $dbh,
+            'SELECT news_return FROM fpl_player_availability
+             WHERE season = ? AND end_time IS NULL AND fpl_draft_element = ?',
+            $SEASON, $element ),
+        '2026-08-23', 'backfill: date restored' );
+}
+
+######
+# TEST news return date parsing
+######
+
+{
+    my ($api) = _mock_api();
+    my $fpl_draft = Mandyville::FPLDraft->new({
+        api    => $api,
+        dbh    => Mandyville::Database->new->rw_db_handle(),
+        season => $SEASON,
+    });
+
+    my %dated = (
+        'Ankle injury - Expected back 23 Aug'    => '2026-08-23',
+        'Hamstring injury - Expected back 5 Sep' => '2026-09-05',
+        'Leg injury - Expected back 28 Nov'      => '2026-11-28',
+        'Suspended until 6 Sep'                  => '2026-09-06',
+        # January to July fall in the season's second calendar year.
+        'Knee injury - Expected back 12 Jan'     => '2027-01-12',
+        'Expected back 3 May'                    => '2027-05-03',
+    );
+
+    foreach my $news (sort keys %dated) {
+        is( scalar $fpl_draft->_parse_news_return($news, $SEASON),
+            $dated{$news}, "news return: '$news'" );
+    }
+
+    foreach my $news (
+        'Knee injury - Unknown return date',
+        'Knock - 75% chance of playing',
+        'Has joined Rangers on loan for the rest of the season',
+        'Expected back 31 Feb',
+        '',
+    ) {
+        is( scalar $fpl_draft->_parse_news_return($news, $SEASON), undef,
+            "news return: no usable date in '$news'" );
+    }
+
+    is( scalar $fpl_draft->_parse_news_return(undef, $SEASON), undef,
+        'news return: undefined news' );
 }
 
 done_testing();
