@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    18%{?dist}
+Release:    19%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -93,6 +93,8 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Thu Aug 20 2026 Owen Davies <owen@odavi.es> - 0.2-19
+
 * Thu Aug 20 2026 Owen Davies <owen@odavi.es> - 0.2-18
 - Update gitignore
 - Add FPL deadline reminders and classic entry tracking
