@@ -22,6 +22,25 @@ fpl_draft:
     - id: 12345
       entry: 678
 
+# Your own classic FPL entry id, tracked by update-fpl-classic.
+fpl_classic:
+  entry: 1234567
+
+# Telegram bot for deadline reminders.
+telegram:
+  token: 'changeme'
+  chat_id: 'changeme'
+
+reminders:
+  notifier: telegram
+  timezone: 'Europe/London'
+  poll_seconds: 300
+  tick_seconds: 30
+  offsets:                 # hours before the deadline
+    classic: [24, 12, 2]
+    draft:   [24, 12, 2]
+    waivers: [24, 2]
+
 healthcheck:
   update-competiton-data: 'changeme'
   update-fixture-data: 'changeme'
@@ -29,3 +48,5 @@ healthcheck:
   update-understat-info: 'changeme'
   update-fpl-draft: 'changeme'
   update-fpl-availability: 'changeme'
+  update-fpl-classic: 'changeme'
+  fpl-deadline-reminders: 'changeme'

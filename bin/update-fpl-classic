@@ -1,0 +1,60 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict;
+
+use Mandyville::Config qw(config);
+use Mandyville::FPLClassic;
+use Mandyville::Utils qw(current_season msg);
+
+use Getopt::Long;
+use Try::Tiny;
+
+binmode(STDOUT, ':encoding(UTF-8)');
+binmode(STDERR, ':encoding(UTF-8)');
+
+my ($dry_run, $entry, $season);
+GetOptions(
+    'dry-run' => \$dry_run,
+    'entry=i' => \$entry,
+    'season=i' => \$season,
+) or die "Invalid options";
+
+my $config = config();
+
+$season //= current_season();
+
+my $entry_id = defined $entry ? $entry : $config->{fpl_classic}{entry};
+
+die 'No classic FPL entry configured (fpl_classic.entry in config) '
+    . 'and no -entry flag given' unless defined $entry_id;
+
+my $fpl_classic = Mandyville::FPLClassic->new({
+    entry   => $entry_id,
+    season  => $season,
+    dry_run => $dry_run,
+});
+
+try {
+    my $changes = $fpl_classic->sync;
+    msg "Done! $changes changes" . ($dry_run ? ' (dry run)' : '');
+} catch {
+    die "update-fpl-classic failed: $_";
+};
+
+=head1 NAME
+
+  update-fpl-classic
+
+=head1 DESCRIPTION
+
+  Fetches the state of the configured classic FPL entry and stores it in
+  the database: the entry profile, its per-gameweek history, chips,
+  transfers and, for gameweeks whose deadline has passed, its lineup
+  picks.
+
+  With C<--dry-run>, nothing is written and the changes that would be
+  made are logged to STDERR instead. C<--entry> overrides the configured
+  entry id. C<--season> overrides the season, which defaults to the
+  current season.
+
+=cut

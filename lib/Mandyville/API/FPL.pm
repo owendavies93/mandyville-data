@@ -3,6 +3,7 @@ package Mandyville::API::FPL;
 use Mojo::Base 'Mandyville::API', -signatures;
 
 use Const::Fast;
+use Mojo::JSON qw(decode_json);
 
 =head1 NAME
   
@@ -59,6 +60,57 @@ sub player_history($self, $id) {
     }
 
     return $elem_summary->{history};
+}
+
+=item entry ( ID )
+
+  Fetch the public profile for the classic FPL entry C<ID>.
+
+=cut
+
+sub entry($self, $id) {
+    return $self->get("entry/$id/");
+}
+
+=item entry_history ( ID )
+
+  Fetch the season history for the classic FPL entry C<ID>, including
+  the per-gameweek C<current> records and the C<chips> played.
+
+=cut
+
+sub entry_history($self, $id) {
+    return $self->get("entry/$id/history/");
+}
+
+=item entry_transfers ( ID )
+
+  Fetch the transfer history for the classic FPL entry C<ID>. This
+  endpoint updates as soon as a transfer is made, unlike the picks.
+
+=cut
+
+sub entry_transfers($self, $id) {
+    return $self->get("entry/$id/transfers/");
+}
+
+=item entry_picks ( ID, EVENT )
+
+  Fetch the squad and lineup for the classic FPL entry C<ID> in the
+  given C<EVENT> (gameweek). Returns C<undef> if the lineup isn't
+  available yet, which is the case before the gameweek's deadline.
+
+=cut
+
+sub entry_picks($self, $id, $event) {
+    my $res = $self->ua->get("$BASE_URL/entry/$id/event/$event/picks/")->res;
+
+    return if $res->code == 404;
+
+    die "FPL API returned " . $res->code . " for entry/$id/event/$event/picks/"
+        if $res->code >= 400;
+
+    return decode_json($res->body);
 }
 
 =item players

@@ -1,0 +1,20 @@
+{
+  "active_chip": null,
+  "picks": [
+    {"element": 100, "position": 1, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 101, "position": 2, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 102, "position": 3, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 103, "position": 4, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 104, "position": 5, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 105, "position": 6, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 106, "position": 7, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 107, "position": 8, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 108, "position": 9, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 109, "position": 10, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 110, "position": 11, "multiplier": 2, "is_captain": true, "is_vice_captain": false},
+    {"element": 111, "position": 12, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 112, "position": 13, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 113, "position": 14, "multiplier": 1, "is_captain": false, "is_vice_captain": false},
+    {"element": 114, "position": 15, "multiplier": 1, "is_captain": false, "is_vice_captain": false}
+  ]
+}

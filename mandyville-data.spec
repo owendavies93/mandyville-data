@@ -7,18 +7,22 @@ License:    MIT
 URL:        https://github.com/sirgraystar/mandyville-data
 Source0:    %{name}-%{version}-%{release}.tar.gz
 
+BuildRequires: systemd-rpm-macros
 Requires:   moreutils
 Requires:   perl(Array::Utils)
 Requires:   perl(Capture::Tiny)
 Requires:   perl(Const::Fast)
 Requires:   perl(Cpanel::JSON::XS)
 Requires:   perl(DateTime)
+Requires:   perl(DateTime::TimeZone)
 Requires:   perl(Dir::Self)
 Requires:   perl(DBD::Pg)
 Requires:   perl(DBI)
 Requires:   perl(File::Temp)
 Requires:   perl(Mojo::Base)
+Requires:   perl(Mojolicious)
 Requires:   perl(SQL::Abstract::More)
+Requires:   perl(Try::Tiny)
 Requires:   perl(YAML::XS)
 
 %description
@@ -37,6 +41,8 @@ install -dm755 %{buildroot}%{_sysconfdir}/mandyville/
 install -Dm644 etc/mandyville/* %{buildroot}%{_sysconfdir}/mandyville/
 install -dm755 %{buildroot}%{_sysconfdir}/cron.d/
 install -Dm644 etc/cron.d/* %{buildroot}%{_sysconfdir}/cron.d/
+install -dm755 %{buildroot}%{_unitdir}/
+install -Dm644 etc/systemd/system/* %{buildroot}%{_unitdir}/
 
 # Libraries
 install -dm755 %{buildroot}%{perl_vendorlib}/Mandyville/
@@ -50,25 +56,38 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 %{_bindir}/update-competition-data
 %{_bindir}/update-fixture-data
 %{_bindir}/update-fpl-availability
+%{_bindir}/update-fpl-classic
 %{_bindir}/update-fpl-draft
 %{_bindir}/update-fpl-info
 %{_bindir}/update-understat-ids
 %{_bindir}/update-understat-info
+%{_bindir}/fpl-deadline-reminders
 
 # Crons
 %{_sysconfdir}/cron.d/update-competition-data
 %{_sysconfdir}/cron.d/update-fixture-data
 %{_sysconfdir}/cron.d/update-fpl-availability
+%{_sysconfdir}/cron.d/update-fpl-classic
 %{_sysconfdir}/cron.d/update-fpl-draft
 %{_sysconfdir}/cron.d/update-fpl-info
 %{_sysconfdir}/cron.d/update-understat-info
+%{_unitdir}/fpl-deadline-reminders.service
 
 # Libraries
 %{perl_vendorlib}/Mandyville/*.pm
 %{perl_vendorlib}/Mandyville/API/*.pm
+%{perl_vendorlib}/Mandyville/Notifier/*.pm
+%{perl_vendorlib}/Mandyville/Reminders/*.pm
 
 # Config
 %config(noreplace) %{_sysconfdir}/mandyville/config.yaml
+
+%post
+%systemd_post fpl-deadline-reminders.service
+
+
+%postun
+%systemd_postun_with_restart fpl-deadline-reminders.service
 
 %clean
 rm -rf $RPM_BUILD_ROOT

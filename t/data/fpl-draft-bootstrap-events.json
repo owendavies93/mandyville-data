@@ -1,0 +1,272 @@
+{
+ "data": [
+  {
+   "id": 1,
+   "name": "Gameweek 1",
+   "deadline_time": "2020-09-12T10:00:00Z",
+   "waivers_time": "2020-09-11T10:00:00Z",
+   "trades_time": "2020-09-10T10:00:00Z"
+  },
+  {
+   "id": 2,
+   "name": "Gameweek 2",
+   "deadline_time": "2020-09-19T10:00:00Z",
+   "waivers_time": "2020-09-18T10:00:00Z",
+   "trades_time": "2020-09-17T10:00:00Z"
+  },
+  {
+   "id": 3,
+   "name": "Gameweek 3",
+   "deadline_time": "2020-09-26T10:00:00Z",
+   "waivers_time": "2020-09-25T10:00:00Z",
+   "trades_time": "2020-09-24T10:00:00Z"
+  },
+  {
+   "id": 4,
+   "name": "Gameweek 4",
+   "deadline_time": "2020-10-03T10:00:00Z",
+   "waivers_time": "2020-10-02T10:00:00Z",
+   "trades_time": "2020-10-01T10:00:00Z"
+  },
+  {
+   "id": 5,
+   "name": "Gameweek 5",
+   "deadline_time": "2020-10-17T10:00:00Z",
+   "waivers_time": "2020-10-16T10:00:00Z",
+   "trades_time": "2020-10-15T10:00:00Z"
+  },
+  {
+   "id": 6,
+   "name": "Gameweek 6",
+   "deadline_time": "2020-10-23T17:30:00Z",
+   "waivers_time": "2020-10-22T17:30:00Z",
+   "trades_time": "2020-10-21T17:30:00Z"
+  },
+  {
+   "id": 7,
+   "name": "Gameweek 7",
+   "deadline_time": "2020-10-30T18:30:00Z",
+   "waivers_time": "2020-10-29T18:30:00Z",
+   "trades_time": "2020-10-28T18:30:00Z"
+  },
+  {
+   "id": 8,
+   "name": "Gameweek 8",
+   "deadline_time": "2020-11-06T16:00:00Z",
+   "waivers_time": "2020-11-05T16:00:00Z",
+   "trades_time": "2020-11-04T16:00:00Z"
+  },
+  {
+   "id": 9,
+   "name": "Gameweek 9",
+   "deadline_time": "2020-11-21T11:00:00Z",
+   "waivers_time": "2020-11-20T11:00:00Z",
+   "trades_time": "2020-11-19T11:00:00Z"
+  },
+  {
+   "id": 10,
+   "name": "Gameweek 10",
+   "deadline_time": "2020-11-27T18:30:00Z",
+   "waivers_time": "2020-11-26T18:30:00Z",
+   "trades_time": "2020-11-25T18:30:00Z"
+  },
+  {
+   "id": 11,
+   "name": "Gameweek 11",
+   "deadline_time": "2020-12-05T11:00:00Z",
+   "waivers_time": "2020-12-04T11:00:00Z",
+   "trades_time": "2020-12-03T11:00:00Z"
+  },
+  {
+   "id": 12,
+   "name": "Gameweek 12",
+   "deadline_time": "2020-12-11T18:30:00Z",
+   "waivers_time": "2020-12-10T18:30:00Z",
+   "trades_time": "2020-12-09T18:30:00Z"
+  },
+  {
+   "id": 13,
+   "name": "Gameweek 13",
+   "deadline_time": "2020-12-15T16:30:00Z",
+   "waivers_time": "2020-12-14T16:30:00Z",
+   "trades_time": "2020-12-13T16:30:00Z"
+  },
+  {
+   "id": 14,
+   "name": "Gameweek 14",
+   "deadline_time": "2020-12-19T11:00:00Z",
+   "waivers_time": "2020-12-18T11:00:00Z",
+   "trades_time": "2020-12-17T11:00:00Z"
+  },
+  {
+   "id": 15,
+   "name": "Gameweek 15",
+   "deadline_time": "2020-12-26T11:00:00Z",
+   "waivers_time": "2020-12-25T11:00:00Z",
+   "trades_time": "2020-12-24T11:00:00Z"
+  },
+  {
+   "id": 16,
+   "name": "Gameweek 16",
+   "deadline_time": "2020-12-28T13:30:00Z",
+   "waivers_time": "2020-12-27T13:30:00Z",
+   "trades_time": "2020-12-26T13:30:00Z"
+  },
+  {
+   "id": 17,
+   "name": "Gameweek 17",
+   "deadline_time": "2021-01-01T16:00:00Z",
+   "waivers_time": "2020-12-31T16:00:00Z",
+   "trades_time": "2020-12-30T16:00:00Z"
+  },
+  {
+   "id": 18,
+   "name": "Gameweek 18",
+   "deadline_time": "2021-01-12T16:30:00Z",
+   "waivers_time": "2021-01-11T16:30:00Z",
+   "trades_time": "2021-01-10T16:30:00Z"
+  },
+  {
+   "id": 19,
+   "name": "Gameweek 19",
+   "deadline_time": "2021-01-16T11:00:00Z",
+   "waivers_time": "2021-01-15T11:00:00Z",
+   "trades_time": "2021-01-14T11:00:00Z"
+  },
+  {
+   "id": 20,
+   "name": "Gameweek 20",
+   "deadline_time": "2021-01-26T16:30:00Z",
+   "waivers_time": "2021-01-25T16:30:00Z",
+   "trades_time": "2021-01-24T16:30:00Z"
+  },
+  {
+   "id": 21,
+   "name": "Gameweek 21",
+   "deadline_time": "2021-01-30T11:00:00Z",
+   "waivers_time": "2021-01-29T11:00:00Z",
+   "trades_time": "2021-01-28T11:00:00Z"
+  },
+  {
+   "id": 22,
+   "name": "Gameweek 22",
+   "deadline_time": "2021-02-02T16:30:00Z",
+   "waivers_time": "2021-02-01T16:30:00Z",
+   "trades_time": "2021-01-31T16:30:00Z"
+  },
+  {
+   "id": 23,
+   "name": "Gameweek 23",
+   "deadline_time": "2021-02-06T11:00:00Z",
+   "waivers_time": "2021-02-05T11:00:00Z",
+   "trades_time": "2021-02-04T11:00:00Z"
+  },
+  {
+   "id": 24,
+   "name": "Gameweek 24",
+   "deadline_time": "2021-02-13T11:00:00Z",
+   "waivers_time": "2021-02-12T11:00:00Z",
+   "trades_time": "2021-02-11T11:00:00Z"
+  },
+  {
+   "id": 25,
+   "name": "Gameweek 25",
+   "deadline_time": "2021-02-19T18:30:00Z",
+   "waivers_time": "2021-02-18T18:30:00Z",
+   "trades_time": "2021-02-17T18:30:00Z"
+  },
+  {
+   "id": 26,
+   "name": "Gameweek 26",
+   "deadline_time": "2021-02-27T11:00:00Z",
+   "waivers_time": "2021-02-26T11:00:00Z",
+   "trades_time": "2021-02-25T11:00:00Z"
+  },
+  {
+   "id": 27,
+   "name": "Gameweek 27",
+   "deadline_time": "2021-03-06T11:00:00Z",
+   "waivers_time": "2021-03-05T11:00:00Z",
+   "trades_time": "2021-03-04T11:00:00Z"
+  },
+  {
+   "id": 28,
+   "name": "Gameweek 28",
+   "deadline_time": "2021-03-12T18:30:00Z",
+   "waivers_time": "2021-03-11T18:30:00Z",
+   "trades_time": "2021-03-10T18:30:00Z"
+  },
+  {
+   "id": 29,
+   "name": "Gameweek 29",
+   "deadline_time": "2021-03-19T18:30:00Z",
+   "waivers_time": "2021-03-18T18:30:00Z",
+   "trades_time": "2021-03-17T18:30:00Z"
+  },
+  {
+   "id": 30,
+   "name": "Gameweek 30",
+   "deadline_time": "2021-04-03T10:00:00Z",
+   "waivers_time": "2021-04-02T10:00:00Z",
+   "trades_time": "2021-04-01T10:00:00Z"
+  },
+  {
+   "id": 31,
+   "name": "Gameweek 31",
+   "deadline_time": "2021-04-09T17:30:00Z",
+   "waivers_time": "2021-04-08T17:30:00Z",
+   "trades_time": "2021-04-07T17:30:00Z"
+  },
+  {
+   "id": 32,
+   "name": "Gameweek 32",
+   "deadline_time": "2021-04-16T17:30:00Z",
+   "waivers_time": "2021-04-15T17:30:00Z",
+   "trades_time": "2021-04-14T17:30:00Z"
+  },
+  {
+   "id": 33,
+   "name": "Gameweek 33",
+   "deadline_time": "2021-04-23T17:30:00Z",
+   "waivers_time": "2021-04-22T17:30:00Z",
+   "trades_time": "2021-04-21T17:30:00Z"
+  },
+  {
+   "id": 34,
+   "name": "Gameweek 34",
+   "deadline_time": "2021-05-01T12:30:00Z",
+   "waivers_time": "2021-04-30T12:30:00Z",
+   "trades_time": "2021-04-29T12:30:00Z"
+  },
+  {
+   "id": 35,
+   "name": "Gameweek 35",
+   "deadline_time": "2021-05-08T12:30:00Z",
+   "waivers_time": "2021-05-07T12:30:00Z",
+   "trades_time": "2021-05-06T12:30:00Z"
+  },
+  {
+   "id": 36,
+   "name": "Gameweek 36",
+   "deadline_time": "2021-05-11T17:15:00Z",
+   "waivers_time": "2021-05-10T17:15:00Z",
+   "trades_time": "2021-05-09T17:15:00Z"
+  },
+  {
+   "id": 37,
+   "name": "Gameweek 37",
+   "deadline_time": "2021-05-15T12:30:00Z",
+   "waivers_time": "2021-05-14T12:30:00Z",
+   "trades_time": "2021-05-13T12:30:00Z"
+  },
+  {
+   "id": 38,
+   "name": "Gameweek 38",
+   "deadline_time": "2021-05-23T13:30:00Z",
+   "waivers_time": "2021-05-22T13:30:00Z",
+   "trades_time": "2021-05-21T13:30:00Z"
+  }
+ ],
+ "current": 1,
+ "next": 1
+}

@@ -54,6 +54,17 @@ sub elements($self) {
     return $self->bootstrap->{elements};
 }
 
+=item events
+
+  Fetch the events (gameweeks) from bootstrap-static, including their
+  C<deadline_time>, C<waivers_time> and C<trades_time>.
+
+=cut
+
+sub events($self) {
+    return $self->bootstrap->{events};
+}
+
 =item league_details ( LEAGUE_ID )
 
   Fetch the details for a draft league, including league configuration,

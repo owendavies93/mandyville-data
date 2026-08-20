@@ -1,0 +1,15 @@
+[Unit]
+Description=mandyville FPL deadline reminders
+After=network-online.target
+
+[Service]
+Type=simple
+User=mandyville
+ExecStart=/usr/bin/fpl-deadline-reminders
+Restart=always
+RestartSec=30
+StandardOutput=append:/var/log/mandyville/fpl-deadline-reminders.log
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target

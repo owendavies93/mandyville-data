@@ -1,0 +1,25 @@
+{
+  "current": [
+    {
+      "event": 1,
+      "points": 67,
+      "total_points": 67,
+      "rank": 1234,
+      "overall_rank": 98765,
+      "percentile_rank": 90,
+      "bank": 5,
+      "value": 1000,
+      "event_transfers": 0,
+      "event_transfers_cost": 0,
+      "points_on_bench": 9
+    }
+  ],
+  "past": [],
+  "chips": [
+    {
+      "name": "wildcard",
+      "event": 1,
+      "time": "2026-08-20T10:00:00Z"
+    }
+  ]
+}

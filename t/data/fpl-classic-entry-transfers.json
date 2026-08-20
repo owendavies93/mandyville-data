@@ -1,0 +1,11 @@
+[
+  {
+    "element_in": 115,
+    "element_in_cost": 75,
+    "element_out": 100,
+    "element_out_cost": 70,
+    "entry": 123456,
+    "event": 2,
+    "time": "2026-08-25T09:00:00Z"
+  }
+]

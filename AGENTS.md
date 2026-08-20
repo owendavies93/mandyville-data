@@ -13,6 +13,14 @@ Perl project for fetching, storing and managing football data for mandyville. In
     backed by `lib/Mandyville/API/FPLDraft.pm` (API client) and
     `lib/Mandyville/FPLDraft.pm` (storage), and write change-only ranges into
     the `fpl_draft_*` and `fpl_player_availability` tables.
+  - `update-fpl-classic` syncs the configured classic FPL entry's profile,
+    history, chips, transfers and past lineups via `lib/Mandyville/FPLClassic.pm`.
+  - `fpl-deadline-reminders` is the long-running daemon (systemd unit
+    `fpl-deadline-reminders.service`) that sends Telegram reminders before the
+    classic, draft and waiver deadlines. It is backed by
+    `lib/Mandyville/Reminders.pm` (scheduling) and
+    `lib/Mandyville/Notifier/Telegram.pm` (delivery), and stores sent reminders
+    in `fpl_reminders` so a moved deadline re-arms its offsets automatically.
   - The API always returns a null `news_return`: the expected return date is
     only given in the free text of `news` ("Expected back 22 Aug", "Suspended
     until 6 Sep"), so it is parsed out there. Consumers treat a missing return

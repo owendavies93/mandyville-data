@@ -1,5 +1,8 @@
 # base
 requires 'Mojo::Base';
+requires 'Mojolicious';
+requires 'DateTime::TimeZone';
+requires 'Try::Tiny';
 
 # libs
 requires 'Array::Utils';

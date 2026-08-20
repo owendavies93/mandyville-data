@@ -7,6 +7,7 @@ use Mojo::Base -strict, -signatures;
 use Test::MockTime qw(set_absolute_time);
 
 use Mandyville::API::FPL;
+use Mandyville::API::FPLDraft;
 use Mandyville::Competitions;
 use Mandyville::Countries;
 use Mandyville::Fixtures;
@@ -56,8 +57,11 @@ use Mandyville::Gameweeks;
 
     my $processed_again = $gameweeks->process_gameweeks;
 
-    cmp_ok( $processed, '==', $processed_again,
-            'process_gameweeks: all records updated' );
+    cmp_ok( $processed_again, '==', 0,
+            'process_gameweeks: no changes on a second run' );
+
+    is( scalar @{$gameweeks->last_changes}, 0,
+        'process_gameweeks: no changes reported when nothing changed' );
 
     $mock_api->mock( 'gameweeks', sub {
         my $data = decode_json($json)->{events};
@@ -67,6 +71,153 @@ use Mandyville::Gameweeks;
 
     throws_ok { $gameweeks->process_gameweeks } qr/Deadline for first/,
                 'process_gameweeks: dies on season mismatch';
+}
+
+######
+# TEST process_draft_gameweeks
+######
+
+{
+    set_absolute_time('2021-01-01T00:00:00Z');
+
+    my $mock_api = Test::MockObject::Extends->new(
+        'Mandyville::API::FPL'
+    );
+
+    my $classic_json = Mojo::File->new(find_file('t/data/events.json'))->slurp;
+
+    $mock_api->mock( 'gameweeks', sub {
+        return decode_json($classic_json)->{events};
+    });
+
+    my $mock_draft_api = Test::MockObject::Extends->new(
+        'Mandyville::API::FPLDraft'
+    );
+
+    my $draft_json =
+        Mojo::File->new(find_file('t/data/fpl-draft-bootstrap-events.json'))->slurp;
+
+    $mock_draft_api->mock( 'events', sub {
+        return decode_json($draft_json);
+    });
+
+    my $db = Mandyville::Database->new;
+    my $gameweeks = Mandyville::Gameweeks->new({
+        api       => $mock_api,
+        draft_api => $mock_draft_api,
+        dbh       => $db->rw_db_handle(),
+    });
+
+    my $updated = $gameweeks->process_draft_gameweeks;
+
+    cmp_ok( $updated, '==', 38 * 3,
+            'process_draft_gameweeks: writes draft, waiver and trade times' );
+
+    my $dbh = $db->rw_db_handle();
+
+    my ($draft_deadline, $waivers, $trades) = $dbh->selectrow_array(
+        'SELECT extract(epoch from draft_deadline)::bigint,
+                extract(epoch from waivers_time)::bigint,
+                extract(epoch from trades_time)::bigint
+         FROM fpl_gameweeks WHERE season = 2020 AND gameweek = 1'
+    );
+
+    is( $draft_deadline, 1599904800,
+        'process_draft_gameweeks: draft deadline stored' );
+    is( $waivers, 1599818400,
+        'process_draft_gameweeks: waiver time stored' );
+    is( $trades, 1599732000,
+        'process_draft_gameweeks: trade time stored' );
+
+    my $history = $dbh->selectrow_array(
+        'SELECT COUNT(*) FROM fpl_gameweek_deadline_history'
+    );
+    cmp_ok( $history, '==', 38 * 4,
+            'process_draft_gameweeks: history rows for every kind and gameweek' );
+
+    # A changed waiver deadline is recorded and closes the old history row.
+    my $data = decode_json($draft_json);
+    $data->{data}[0]{waivers_time} = '2020-09-11T18:00:00Z';
+    $mock_draft_api->mock( 'events', sub { $data } );
+
+    my $changed = $gameweeks->process_draft_gameweeks;
+    cmp_ok( $changed, '==', 1,
+            'process_draft_gameweeks: one change when a waiver time moves' );
+
+    my @changes = @{$gameweeks->last_changes};
+    is( scalar @changes, 1, 'process_draft_gameweeks: one change reported' );
+    is( $changes[0]{kind}, 'waivers',
+        'process_draft_gameweeks: change is the waiver time' );
+    is( $gameweeks->_timestamp_epoch($changes[0]{old}), 1599818400,
+        'process_draft_gameweeks: old waiver time reported' );
+    is( $gameweeks->_timestamp_epoch($changes[0]{new}), 1599847200,
+        'process_draft_gameweeks: new waiver time reported' );
+
+    my ($open, $closed) = $dbh->selectrow_array(q{
+        SELECT
+            COUNT(*) FILTER (WHERE end_time IS NULL),
+            COUNT(*) FILTER (WHERE end_time IS NOT NULL)
+        FROM fpl_gameweek_deadline_history
+        WHERE fpl_gameweek_id = (SELECT id FROM fpl_gameweeks
+                                  WHERE season = 2020 AND gameweek = 1)
+          AND kind = 'waivers'
+    });
+    is( $open, 1, 'process_draft_gameweeks: one open waiver history row' );
+    is( $closed, 1, 'process_draft_gameweeks: old waiver history row closed' );
+}
+
+######
+# TEST upcoming_deadlines
+######
+
+{
+    set_absolute_time('2021-01-01T00:00:00Z');
+
+    my $db = Mandyville::Database->new;
+    my $dbh = $db->rw_db_handle();
+
+    $dbh->do(q{
+        INSERT INTO fpl_gameweeks (season, gameweek, deadline,
+                                   draft_deadline, waivers_time, trades_time)
+        VALUES
+            (2020, 17, '2021-01-01 11:00:00+00',
+             '2021-01-01 11:00:00+00', '2020-12-31 11:00:00+00',
+             '2020-12-30 11:00:00+00'),
+            (2020, 18, '2021-01-12 16:30:00+00',
+             '2021-01-12 16:30:00+00', '2021-01-11 16:30:00+00',
+             '2021-01-10 16:30:00+00')
+        ON CONFLICT (season, gameweek) DO UPDATE SET
+            deadline       = EXCLUDED.deadline,
+            draft_deadline = EXCLUDED.draft_deadline,
+            waivers_time   = EXCLUDED.waivers_time,
+            trades_time    = EXCLUDED.trades_time
+    });
+
+    my $gameweeks = Mandyville::Gameweeks->new({ dbh => $dbh });
+
+    my ($gw17_deadline) = $dbh->selectrow_array(
+        'SELECT extract(epoch from deadline)::bigint
+         FROM fpl_gameweeks WHERE season = 2020 AND gameweek = 17'
+    );
+
+    # Look forward from just after the GW17 deadline, so every GW17 entry
+    # is in the past and only the four GW18 entries remain.
+    my $now = $gw17_deadline + 1;
+
+    my $upcoming = $gameweeks->upcoming_deadlines($now, 30 * 24 * 3600);
+
+    is( scalar @$upcoming, 4,
+        'upcoming_deadlines: only GW18 entries remain after the GW17 deadline' );
+
+    is( $upcoming->[0]{kind}, 'trades',
+        'upcoming_deadlines: earliest upcoming deadline is the trade time' );
+    is( $upcoming->[0]{gameweek}, 18,
+        'upcoming_deadlines: GW18 trade time comes first' );
+
+    my @kinds = map { $_->{kind} } @$upcoming;
+    is( scalar @kinds, 4, 'upcoming_deadlines: four upcoming kinds' );
+    my $waivers = grep { $_ eq 'waivers' } @kinds;
+    is( $waivers, 1, 'upcoming_deadlines: waiver time included' );
 }
 
 ######

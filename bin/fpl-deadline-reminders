@@ -1,0 +1,156 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict, -signatures;
+
+use Mandyville::Config qw(config);
+use Mandyville::Database;
+use Mandyville::Healthcheck;
+use Mandyville::Notifier;
+use Mandyville::Reminders;
+use Mandyville::Utils qw(current_season debug msg);
+
+use Const::Fast;
+use Getopt::Long;
+use Mojo::IOLoop;
+use Time::Piece;
+use Try::Tiny;
+
+const my $DEFAULT_POLL_SECONDS => 300;
+const my $DEFAULT_TICK_SECONDS => 30;
+const my $HEALTHCHECK_NAME     => 'fpl-deadline-reminders';
+
+binmode(STDOUT, ':encoding(UTF-8)');
+binmode(STDERR, ':encoding(UTF-8)');
+
+my ($dry_run, $once, $list, $season);
+GetOptions(
+    'dry-run' => \$dry_run,
+    'once'    => \$once,
+    'list'    => \$list,
+    'season=i' => \$season,
+) or die "Invalid options";
+
+my $config = config();
+my $dbh    = Mandyville::Database->new->rw_db_handle();
+
+$season //= current_season();
+
+my $reminders = Mandyville::Reminders->new({
+    dbh      => $dbh,
+    notifier => undef,
+    config   => $config,
+    season   => $season,
+    dry_run  => $dry_run,
+});
+
+if ($list) {
+    _list($reminders);
+    exit 0;
+}
+
+$reminders->{notifier} = $dry_run ? undef : Mandyville::Notifier->factory($config);
+
+if ($once) {
+    my $sent = $reminders->tick(time());
+    msg "Done! $sent reminders sent" . ($dry_run ? ' (dry run)' : '');
+    exit 0;
+}
+
+my $poll_seconds = $config->{reminders}{poll_seconds} // $DEFAULT_POLL_SECONDS;
+my $tick_seconds = $config->{reminders}{tick_seconds} // $DEFAULT_TICK_SECONDS;
+
+my $failures = 0;
+
+my $run_poll = sub {
+    try {
+        my $changes = $reminders->refresh;
+        $reminders->announce_changes($changes);
+        $failures = 0;
+
+        if (!$dry_run) {
+            try {
+                Mandyville::Healthcheck->new->ping($HEALTHCHECK_NAME);
+            } catch {
+                debug "healthcheck ping failed: $_";
+            };
+        }
+    } catch {
+        $failures++;
+        debug "poll failed: $_";
+    };
+};
+
+my $run_tick = sub {
+    try {
+        $reminders->due_reminders(time());
+    } catch {
+        $failures++;
+        debug "tick failed: $_";
+    };
+};
+
+# Bring deadlines up to date before the first reminder evaluation.
+$run_poll->();
+
+my $poll_timer = Mojo::IOLoop->recurring($poll_seconds => $run_poll);
+my $tick_timer = Mojo::IOLoop->recurring($tick_seconds => $run_tick);
+
+local $SIG{INT} = local $SIG{TERM} = sub {
+    msg 'Shutting down';
+    Mojo::IOLoop->singleton->stop;
+};
+
+Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
+
+sub _list($reminders) {
+    my $now = time();
+    my $pending = $reminders->pending($now, 14 * 24 * 3600);
+
+    if (!@$pending) {
+        msg 'No upcoming deadlines';
+        return;
+    }
+
+    foreach my $group (@$pending) {
+        my $deadline = Time::Piece->gmtime($group->{deadline_epoch});
+
+        msg sprintf(
+            '%s GW%d %s at %s',
+            join('+', @{$group->{kinds}}), $group->{gameweek},
+            $group->{deadline},
+            $deadline->strftime('%a %d %b %H:%M UTC')
+        );
+
+        foreach my $fire (@{$group->{fires}}) {
+            my $t = Time::Piece->gmtime($fire->{fire});
+            msg sprintf(
+                '  %5d min before -> %s',
+                $fire->{offset_minutes},
+                $t->strftime('%a %d %b %H:%M UTC')
+            );
+        }
+    }
+
+    return;
+}
+
+=head1 NAME
+
+  fpl-deadline-reminders [ --dry-run ] [ --once ] [ --list ] [ --season SEASON ]
+
+=head1 DESCRIPTION
+
+  Long-running daemon that watches the FPL classic and draft deadlines,
+  keeps them up to date in the database, and sends Telegram reminders at
+  the configured offsets before each deadline. Deadline changes are
+  detected and announced, and reminders re-arm automatically when a
+  deadline moves.
+
+  With C<--dry-run>, reminders are logged instead of sent and not
+  recorded (deadline refresh still updates the database). With C<--once>,
+  a single poll-and-send pass is performed and the process exits. With
+  C<--list>, the upcoming deadlines and their scheduled reminder times
+  are printed and the process exits. C<--season> overrides the season,
+  which defaults to the current season.
+
+=cut

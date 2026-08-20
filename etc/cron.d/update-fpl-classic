@@ -1,0 +1,1 @@
+15 * * * * mandyville /usr/bin/update-fpl-classic 2>&1 | ts '[\%Y-\%m-\%d \%H:\%M:\%S]' >> /var/log/mandyville/update-fpl-classic.log && send-healthcheck --name update-fpl-classic

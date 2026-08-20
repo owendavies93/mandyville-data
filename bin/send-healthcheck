@@ -2,17 +2,10 @@
 
 use Mojo::Base -strict;
 
-use Mandyville::Config qw(config);
-use Mojo::UserAgent;
+use Mandyville::Healthcheck;
 
-use Const::Fast;
 use Getopt::Long;
 use Pod::Usage;
-
-const my $BASE_URL => 'https://hc-ping.com/';
-
-my $ua = Mojo::UserAgent->new->connect_timeout(20);
-my $config = config();
 
 my $name;
 GetOptions(
@@ -21,11 +14,7 @@ GetOptions(
 
 pod2usage("send-healthcheck: --name required") unless defined $name;
 
-my $ping_path = $config->{healthcheck}->{$name};
-
-die "Can't find ping path for $name" unless defined $ping_path;
-
-$ua->get($BASE_URL . $ping_path);
+Mandyville::Healthcheck->new->ping($name);
 
 =head1 NAME
 
@@ -48,4 +37,3 @@ $ua->get($BASE_URL . $ping_path);
 =back
 
 =cut
-
