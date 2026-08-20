@@ -18,9 +18,17 @@ use Try::Tiny;
 const my $DEFAULT_POLL_SECONDS => 300;
 const my $DEFAULT_TICK_SECONDS => 30;
 const my $HEALTHCHECK_NAME     => 'fpl-deadline-reminders';
+const my $SUMMARY_HORIZON      => 14 * 24 * 3600;
+const my $SUMMARY_INTERVAL     => 3600;
 
 binmode(STDOUT, ':encoding(UTF-8)');
 binmode(STDERR, ':encoding(UTF-8)');
+
+# Output is piped through ts by the systemd unit, so it has to be
+# unbuffered or every line gets the timestamp of the flush rather than
+# the timestamp of the event.
+STDOUT->autoflush(1);
+STDERR->autoflush(1);
 
 my ($dry_run, $once, $list, $season);
 GetOptions(
@@ -53,19 +61,30 @@ $reminders->{notifier} = $dry_run ? undef : Mandyville::Notifier->factory($confi
 if ($once) {
     my $sent = $reminders->tick(time());
     msg "Done! $sent reminders sent" . ($dry_run ? ' (dry run)' : '');
+    _log_schedule($reminders, time());
     exit 0;
 }
 
 my $poll_seconds = $config->{reminders}{poll_seconds} // $DEFAULT_POLL_SECONDS;
 my $tick_seconds = $config->{reminders}{tick_seconds} // $DEFAULT_TICK_SECONDS;
 
+_log_startup($config, $season, $poll_seconds, $tick_seconds, $dry_run);
+
 my $failures = 0;
 
 my $run_poll = sub {
     try {
         my $changes = $reminders->refresh;
-        $reminders->announce_changes($changes);
+        my $count = scalar @{$changes // []};
+        msg "Poll: $count deadline change(s) detected" if $count;
+
+        my $announced = $reminders->announce_changes($changes);
+        msg "Poll: announced $announced deadline change(s)" if $announced;
+
+        msg "Poll: recovered after $failures failure(s)" if $failures;
         $failures = 0;
+
+        _log_schedule($reminders, time());
 
         if (!$dry_run) {
             try {
@@ -76,16 +95,21 @@ my $run_poll = sub {
         }
     } catch {
         $failures++;
-        debug "poll failed: $_";
+        debug "poll failed ($failures consecutive): $_";
     };
 };
 
 my $run_tick = sub {
     try {
-        $reminders->due_reminders(time());
+        my $sent = $reminders->due_reminders(time());
+
+        if ($sent) {
+            msg "Tick: $sent reminder(s) sent";
+            _log_schedule($reminders, time());
+        }
     } catch {
         $failures++;
-        debug "tick failed: $_";
+        debug "tick failed ($failures consecutive): $_";
     };
 };
 
@@ -104,7 +128,7 @@ Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
 
 sub _list($reminders) {
     my $now = time();
-    my $pending = $reminders->pending($now, 14 * 24 * 3600);
+    my $pending = $reminders->pending($now, $SUMMARY_HORIZON);
 
     if (!@$pending) {
         msg 'No upcoming deadlines';
@@ -132,6 +156,106 @@ sub _list($reminders) {
     }
 
     return;
+}
+
+sub _log_startup($config, $season, $poll_seconds, $tick_seconds, $dry_run) {
+    my $reminder_config = $config->{reminders} // {};
+
+    msg sprintf(
+        'Starting: season %s, poll %ds, tick %ds, notifier %s%s',
+        $season, $poll_seconds, $tick_seconds,
+        $reminder_config->{notifier} // 'telegram',
+        $dry_run ? ', DRY RUN' : ''
+    );
+
+    my $entry = $config->{fpl_classic}{entry};
+    my $leagues = $config->{fpl_draft}{leagues} // [];
+
+    msg sprintf(
+        'Tracking: classic entry %s, %d draft league(s)',
+        $entry // 'none', scalar @$leagues
+    );
+
+    my $offsets = $reminder_config->{offsets} // {};
+    my @parts;
+
+    foreach my $kind (sort keys %$offsets) {
+        my $hours = join '/', map { $_ . 'h' } @{$offsets->{$kind} // []};
+        push @parts, "$kind=$hours";
+    }
+
+    msg 'Offsets: ' . join(' ', @parts) if @parts;
+
+    return;
+}
+
+# Logs the next deadline and the next reminder due. Only logged when it
+# changes, or hourly, so a quiet week doesn't fill the log but there's
+# still a regular sign of life.
+sub _log_schedule($reminders, $now) {
+    state $last_key  = '';
+    state $last_time = 0;
+
+    my ($key, $summary) = _schedule_summary($reminders, $now);
+
+    return if $key eq $last_key && $now - $last_time < $SUMMARY_INTERVAL;
+
+    $last_key  = $key;
+    $last_time = $now;
+
+    msg $summary;
+    return;
+}
+
+sub _schedule_summary($reminders, $now) {
+    my $pending = $reminders->pending($now, $SUMMARY_HORIZON);
+
+    return ('none', 'No upcoming deadlines') unless @$pending;
+
+    my $next = $pending->[0];
+    my $deadline = Time::Piece->gmtime($next->{deadline_epoch});
+
+    my $summary = sprintf(
+        'Next deadline: %s GW%d at %s (in %s)',
+        join('+', @{$next->{kinds}}), $next->{gameweek},
+        $deadline->strftime('%a %d %b %H:%M UTC'),
+        _duration($next->{deadline_epoch} - $now)
+    );
+
+    my @fires;
+    foreach my $group (@$pending) {
+        foreach my $fire (@{$group->{fires}}) {
+            push @fires, { %$fire, group => $group } if $fire->{fire} > $now;
+        }
+    }
+
+    my $key = $next->{deadline_epoch};
+
+    return ($key, $summary) unless @fires;
+
+    my ($soonest) = sort { $a->{fire} <=> $b->{fire} } @fires;
+
+    $summary .= sprintf(
+        '; next reminder %dh before %s GW%d, in %s',
+        $soonest->{offset_minutes} / 60,
+        join('+', @{$soonest->{group}{kinds}}),
+        $soonest->{group}{gameweek},
+        _duration($soonest->{fire} - $now)
+    );
+
+    return ("$key:$soonest->{fire}", $summary);
+}
+
+sub _duration($seconds) {
+    return 'now' if $seconds <= 0;
+
+    my $days    = int($seconds / (24 * 3600));
+    my $hours   = int(($seconds % (24 * 3600)) / 3600);
+    my $minutes = int(($seconds % 3600) / 60);
+
+    return sprintf('%dd %dh', $days, $hours) if $days;
+    return sprintf('%dh %dm', $hours, $minutes) if $hours;
+    return sprintf('%dm', $minutes);
 }
 
 =head1 NAME

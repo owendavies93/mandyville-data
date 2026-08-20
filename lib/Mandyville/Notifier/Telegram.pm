@@ -2,6 +2,8 @@ package Mandyville::Notifier::Telegram;
 
 use Mojo::Base 'Mandyville::Notifier', -signatures;
 
+use Mandyville::Utils qw(debug);
+
 use Carp;
 use Const::Fast;
 use Mojo::JSON qw(decode_json);
@@ -96,14 +98,17 @@ sub deliver($self, $text) {
                     if ref $body eq 'HASH';
             }
 
+            debug "telegram: HTTP $code, retrying in ${retry_after}s";
             sleep $retry_after;
             next;
         }
 
         # Client errors (bad token, bad chat) will never succeed.
+        debug "telegram: HTTP $code, giving up: " . ($res->body // '');
         return 0;
     }
 
+    debug "telegram: gave up after $MAX_RETRIES attempts";
     return 0;
 }
 

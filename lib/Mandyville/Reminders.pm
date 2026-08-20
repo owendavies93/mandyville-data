@@ -5,7 +5,7 @@ use Mojo::Base -base, -signatures;
 use Mandyville::Gameweeks;
 use Mandyville::FPLClassic;
 use Mandyville::Reminders::Message;
-use Mandyville::Utils qw(current_season debug);
+use Mandyville::Utils qw(current_season debug msg);
 
 use Const::Fast;
 use Time::Piece;
@@ -132,6 +132,10 @@ sub announce_changes($self, $changes) {
             $change->{season}, $change->{gameweek}, $kind, -1, $change->{new}
         );
 
+        msg sprintf('GW%d %s deadline moved: %s -> %s',
+            $change->{gameweek}, $change->{kind},
+            _format_ts($change->{old} // 'unknown'), _format_ts($change->{new}));
+
         my $ok = $self->_deliver($message);
 
         $self->_record(
@@ -190,12 +194,20 @@ sub due_reminders($self, $now) {
         my @sorted = sort { $b->{fire} <=> $a->{fire} } @due;
         my $send = shift @sorted;
 
+        my $label = join('+', @{$group->{kinds}});
+
+        msg sprintf('Sending %s GW%d reminder, %d min before deadline',
+            $label, $group->{gameweek}, $send->{offset_minutes});
+
         my $context = $self->_build_context($group);
         my $message = Mandyville::Reminders::Message->render(
             $group, $context, $self->config
         );
 
         my $ok = $self->_deliver($message);
+
+        debug sprintf('Delivery failed for %s GW%d, will retry on the next tick',
+            $label, $group->{gameweek}) unless $ok;
 
         $self->_record(
             $group->{season}, $group->{gameweek}, $group->{kind},
@@ -205,6 +217,10 @@ sub due_reminders($self, $now) {
         $sent++ if $ok;
 
         foreach my $skipped (@sorted) {
+            msg sprintf('Suppressing %s GW%d %d min reminder, overtaken by the %d min one',
+                $label, $group->{gameweek}, $skipped->{offset_minutes},
+                $send->{offset_minutes});
+
             $self->_record(
                 $group->{season}, $group->{gameweek}, $group->{kind},
                 $skipped->{offset_minutes}, $group->{deadline},

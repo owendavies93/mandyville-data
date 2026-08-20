@@ -5,11 +5,12 @@ After=network-online.target
 [Service]
 Type=simple
 User=mandyville
-ExecStart=/usr/bin/fpl-deadline-reminders
+# Piped through ts so the log lines are timestamped in the same format
+# as the cron logs. The %% are escaped for systemd, which treats a single
+# % as the start of a specifier.
+ExecStart=/bin/sh -c '/usr/bin/fpl-deadline-reminders 2>&1 | /usr/bin/ts "[%%Y-%%m-%%d %%H:%%M:%%S]" >> /var/log/mandyville/fpl-deadline-reminders.log'
 Restart=always
 RestartSec=30
-StandardOutput=append:/var/log/mandyville/fpl-deadline-reminders.log
-StandardError=inherit
 
 [Install]
 WantedBy=multi-user.target
