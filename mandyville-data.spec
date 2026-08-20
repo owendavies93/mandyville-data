@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    16%{?dist}
+Release:    17%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -74,6 +74,14 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Thu Aug 20 2026 Owen Davies <owen@odavi.es> - 0.2-17
+- Parse expected return date from FPL news text
+- Correct changelog date
+- Ignore draft rank from availability change processing
+- Update submodle
+- Update submodule
+- Add FPL Draft and availability sync crons
+
 * Tue Aug 18 2026 Owen Davies <owen@odavi.es> - 0.2-16
 - Add crons for FPL Draft league state and player availability
 - Update submodule
