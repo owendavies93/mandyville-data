@@ -4,3 +4,4 @@ cover_db
 .prove
 sql/
 .*
+TODO.md
