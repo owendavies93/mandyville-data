@@ -26,84 +26,78 @@ my @duplicates = (
     [2043,  20749, 'Rodri / Rodrigo'],
 );
 
-# Tables with player_id foreign keys
-my @fk_tables = qw(
-    players_fixtures
-    fpl_season_info
-    fpl_players_gameweeks
-    fpl_names
-    predictions
+# Columns that can't be migrated with a plain UPDATE
+my %handlers = (
+    'players_fixtures.player_id' => \&migrate_players_fixtures,
+    'players_teams.player_id'    => \&migrate_players_teams,
 );
+
+# Columns copied to the canonical player when it doesn't have one
+my @external_ids = qw(football_data_id understat_id fpl_id);
+
+my $references = player_references($dbh);
 
 foreach my $dup (@duplicates) {
     my ($keep_id, $remove_id, $desc) = @$dup;
 
     msg "Processing: $desc (keep #$keep_id, remove #$remove_id)";
 
+    my @missing = grep { !player_exists($dbh, $sqla, $_) }
+                  ($keep_id, $remove_id);
+
+    if (@missing) {
+        msg '  Skipping: no player with ID ' . join(', ', @missing);
+        next;
+    }
+
     $dbh->begin_work;
 
     eval {
-        foreach my $table (@fk_tables) {
+        foreach my $ref (@$references) {
+            my ($table, $column) = @{$ref}{qw(table column)};
+
             my ($stmt, @bind) = $sqla->select(
                 -columns => 'COUNT(*)',
                 -from    => $table,
-                -where   => { player_id => $remove_id },
+                -where   => { $column => $remove_id },
             );
 
             my ($count) = $dbh->selectrow_array($stmt, undef, @bind);
 
-            if ($count > 0) {
-                msg "  $table: $count rows to migrate";
+            next if $count == 0;
 
-                if (!$dry_run) {
-                    # For tables with unique constraints involving
-                    # player_id, delete conflicting rows first
-                    if ($table eq 'players_fixtures') {
-                        ($stmt, @bind) = $sqla->delete(
-                            -from  => $table,
-                            -where => {
-                                player_id  => $remove_id,
-                                fixture_id => {
-                                    -in => \["SELECT fixture_id FROM $table WHERE player_id = ?", $keep_id],
-                                },
-                            },
-                        );
-                        my $deleted = $dbh->do($stmt, undef, @bind);
-                        msg "    Deleted $deleted conflicting rows"
-                            if $deleted > 0;
-                    }
+            msg "  $table.$column: $count rows to migrate";
 
-                    ($stmt, @bind) = $sqla->update(
-                        -table => $table,
-                        -set   => { player_id => $keep_id },
-                        -where => { player_id => $remove_id },
-                    );
-                    $dbh->do($stmt, undef, @bind);
-                }
-            }
+            my $handler = $handlers{"$table.$column"} // \&migrate_rows;
+
+            $handler->($dbh, $sqla, $table, $column, $keep_id, $remove_id);
         }
 
-        # Copy football_data_id if the canonical entry doesn't have one
         my ($stmt, @bind) = $sqla->select(
-            -columns => [qw(football_data_id fpl_id)],
+            -columns => \@external_ids,
             -from    => 'players',
             -where   => { id => $remove_id },
         );
-        my ($dup_fd_id, $dup_fpl_id) =
-            $dbh->selectrow_array($stmt, undef, @bind);
 
-        if (!$dry_run) {
-            # Delete the duplicate
-            ($stmt, @bind) = $sqla->delete(
-                -from  => 'players',
-                -where => { id => $remove_id },
-            );
-            $dbh->do($stmt, undef, @bind);
-            msg "  Deleted player #$remove_id";
+        my $dup_ids = $dbh->selectrow_hashref($stmt, undef, @bind);
+
+        ($stmt, @bind) = $sqla->delete(
+            -from  => 'players',
+            -where => { id => $remove_id },
+        );
+
+        $dbh->do($stmt, undef, @bind);
+        msg "  Deleted player #$remove_id";
+
+        copy_external_ids($dbh, $sqla, $keep_id, $dup_ids);
+
+        if ($dry_run) {
+            $dbh->rollback;
+            msg '  Done (dry run, rolled back)';
+        } else {
+            $dbh->commit;
+            msg '  Done';
         }
-
-        $dbh->commit;
-        msg "  Done" . ($dry_run ? " (dry run)" : "");
     };
 
     if ($@) {
@@ -124,13 +118,348 @@ msg "Finished!";
   foreign key references from the duplicate to the canonical entry,
   then deletes the duplicate row.
 
+  The list of tables to migrate is read from the database catalogue,
+  so any table that gains a foreign key to C<players> is picked up
+  automatically. Rows that would break a unique constraint on the
+  canonical player are removed before the migration, again using the
+  unique indexes defined in the database.
+
+  Two tables need bespoke handling:
+
+  * C<players_fixtures>, where the duplicate's row for a fixture the
+    canonical player already has is dropped, even if it's recorded
+    against a different team.
+  * C<players_teams>, where the two sets of stints are interleaved and
+    rewritten as a single, non-overlapping timeline with at most one
+    open stint.
+
+  Any C<football_data_id>, C<understat_id> or C<fpl_id> held by the
+  duplicate is copied to the canonical player if it doesn't have one.
+
 =head1 OPTIONS
 
 =over
 
 =item --dry-run
 
-  Show what would be done without making any changes.
+  Perform the merge and roll it back, reporting what would be done.
+
+=back
+
+=head1 SUBROUTINES
+
+=over
+
+=item player_exists ( DBH, SQLA, ID )
+
+  Returns true if a player with the given C<ID> is in the database.
+
+=cut
+
+sub player_exists($dbh, $sqla, $id) {
+    my ($stmt, @bind) = $sqla->select(
+        -columns => 'COUNT(*)',
+        -from    => 'players',
+        -where   => { id => $id },
+    );
+
+    my ($count) = $dbh->selectrow_array($stmt, undef, @bind);
+    return $count > 0;
+}
+
+=item player_references ( DBH )
+
+  Returns every table and column with a foreign key to C<players>, as
+  an arrayref of hashrefs with C<table> and C<column> keys.
+
+=cut
+
+sub player_references($dbh) {
+    my $stmt = q{
+        SELECT c.conrelid::regclass::text AS table,
+               a.attname                  AS column
+          FROM pg_constraint c
+          JOIN unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord) ON TRUE
+          JOIN pg_attribute a ON a.attrelid = c.conrelid
+                             AND a.attnum   = k.attnum
+         WHERE c.contype  = 'f'
+           AND c.confrelid = 'players'::regclass
+         ORDER BY 1, 2
+    };
+
+    return $dbh->selectall_arrayref($stmt, { Slice => {} });
+}
+
+=item unique_column_sets ( DBH, TABLE, COLUMN )
+
+  Returns the column lists of every unique index on C<TABLE> that
+  includes C<COLUMN>. Partial and expression indexes are ignored,
+  since we can't reason about them generically.
+
+=cut
+
+sub unique_column_sets($dbh, $table, $column) {
+    my $stmt = q{
+        SELECT i.indnkeyatts             AS key_columns,
+               i.indpred IS NOT NULL     AS partial,
+               array_agg(a.attname ORDER BY k.ord) AS columns
+          FROM pg_index i
+          JOIN unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
+            ON k.ord <= i.indnkeyatts
+          LEFT JOIN pg_attribute a ON a.attrelid = i.indrelid
+                                  AND a.attnum   = k.attnum
+         WHERE i.indisunique
+           AND i.indrelid = ?::regclass
+         GROUP BY i.indexrelid, i.indnkeyatts, i.indpred
+    };
+
+    my $indexes = $dbh->selectall_arrayref($stmt, { Slice => {} }, $table);
+
+    my @sets;
+
+    foreach my $index (@$indexes) {
+        next if $index->{partial};
+
+        my @columns = @{ $index->{columns} };
+
+        # Expression columns come back as undef
+        next if grep { !defined } @columns;
+        next if scalar @columns != $index->{key_columns};
+        next unless grep { $_ eq $column } @columns;
+
+        push @sets, \@columns;
+    }
+
+    return \@sets;
+}
+
+=item delete_conflicts ( DBH, TABLE, COLUMN, KEEP_ID, REMOVE_ID )
+
+  Deletes any row belonging to C<REMOVE_ID> that would clash with a
+  row belonging to C<KEEP_ID> once C<COLUMN> is rewritten.
+
+=cut
+
+sub delete_conflicts($dbh, $table, $column, $keep_id, $remove_id) {
+    my $sets = unique_column_sets($dbh, $table, $column);
+
+    my $quoted_table  = $dbh->quote_identifier($table);
+    my $quoted_column = $dbh->quote_identifier($column);
+
+    foreach my $set (@$sets) {
+        my @conditions = map {
+            my $other = $dbh->quote_identifier($_);
+            "k.$other IS NOT DISTINCT FROM d.$other";
+        } grep { $_ ne $column } @$set;
+
+        my $matches = join ' AND ', "k.$quoted_column = ?", @conditions;
+
+        my $deleted = $dbh->do(qq{
+            DELETE FROM $quoted_table d
+                  WHERE d.$quoted_column = ?
+                    AND EXISTS (
+                        SELECT 1
+                          FROM $quoted_table k
+                         WHERE $matches
+                    )
+        }, undef, $remove_id, $keep_id);
+
+        msg "    Deleted $deleted conflicting rows" if $deleted > 0;
+    }
+
+    return;
+}
+
+=item migrate_rows ( DBH, SQLA, TABLE, COLUMN, KEEP_ID, REMOVE_ID )
+
+  Points every C<REMOVE_ID> row in C<TABLE> at C<KEEP_ID>, dropping
+  rows that would break a unique constraint first.
+
+=cut
+
+sub migrate_rows($dbh, $sqla, $table, $column, $keep_id, $remove_id) {
+    delete_conflicts($dbh, $table, $column, $keep_id, $remove_id);
+
+    my ($stmt, @bind) = $sqla->update(
+        -table => $table,
+        -set   => { $column => $keep_id },
+        -where => { $column => $remove_id },
+    );
+
+    $dbh->do($stmt, undef, @bind);
+    return;
+}
+
+=item migrate_players_fixtures ( DBH, SQLA, TABLE, COLUMN, KEEP_ID, REMOVE_ID )
+
+  As C<migrate_rows>, but drops the duplicate's row for any fixture
+  the canonical player already appears in. The unique constraint also
+  covers the team, but a player can only feature once in a fixture, so
+  we dedupe on the fixture alone.
+
+=cut
+
+sub migrate_players_fixtures(
+    $dbh, $sqla, $table, $column, $keep_id, $remove_id) {
+
+    my ($stmt, @bind) = $sqla->delete(
+        -from  => $table,
+        -where => {
+            $column    => $remove_id,
+            fixture_id => {
+                -in => \["SELECT fixture_id FROM $table WHERE $column = ?",
+                         $keep_id],
+            },
+        },
+    );
+
+    my $deleted = $dbh->do($stmt, undef, @bind);
+
+    msg "    Deleted $deleted conflicting rows" if $deleted > 0;
+
+    return migrate_rows($dbh, $sqla, $table, $column, $keep_id, $remove_id);
+}
+
+=item migrate_players_teams ( DBH, SQLA, TABLE, COLUMN, KEEP_ID, REMOVE_ID )
+
+  Rebuilds the canonical player's team history from both players'
+  stints. The stints are ordered by start date, consecutive stints at
+  the same team are collapsed, and every stint bar the last is closed
+  by the start of the one that follows it, matching the semantics used
+  by C<backfill-players-teams> and C<update_player_team>.
+
+=cut
+
+sub migrate_players_teams($dbh, $sqla, $table, $column, $keep_id, $remove_id) {
+    my ($stmt, @bind) = $sqla->select(
+        -columns  => [qw(team_id start_date end_date)],
+        -from     => $table,
+        -where    => { $column => { -in => [$keep_id, $remove_id] } },
+        -order_by => [qw(start_date end_date)],
+    );
+
+    my $stints = $dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+    my $merged = merge_stints($stints);
+
+    ($stmt, @bind) = $sqla->delete(
+        -from  => $table,
+        -where => { $column => { -in => [$keep_id, $remove_id] } },
+    );
+
+    $dbh->do($stmt, undef, @bind);
+
+    foreach my $stint (@$merged) {
+        ($stmt, @bind) = $sqla->insert(
+            -into   => $table,
+            -values => {
+                $column    => $keep_id,
+                team_id    => $stint->{team_id},
+                start_date => $stint->{start_date},
+                end_date   => $stint->{end_date},
+            },
+        );
+
+        $dbh->do($stmt, undef, @bind);
+    }
+
+    msg '    Rebuilt team history: ' . scalar(@$merged) . ' stints';
+
+    return;
+}
+
+=item merge_stints ( STINTS )
+
+  Takes an arrayref of stint hashrefs ordered by start date and
+  returns a single, non-overlapping timeline. Consecutive stints at
+  the same team are collapsed into one, every stint bar the last is
+  closed by the start of the next, and stints that are entirely
+  covered by a later one are dropped.
+
+=cut
+
+sub merge_stints($stints) {
+    my @merged;
+
+    foreach my $stint (@$stints) {
+        my $previous = $merged[-1];
+
+        if (defined $previous && $previous->{team_id} == $stint->{team_id}) {
+            $previous->{end_date} =
+                later_date($previous->{end_date}, $stint->{end_date});
+            next;
+        }
+
+        push @merged, { %$stint };
+    }
+
+    foreach my $i (0 .. $#merged - 1) {
+        $merged[$i]->{end_date} = $merged[$i + 1]->{start_date};
+    }
+
+    return [ grep {
+        !defined $_->{end_date} || $_->{end_date} gt $_->{start_date}
+    } @merged ];
+}
+
+=item later_date ( FIRST, SECOND )
+
+  Returns the later of two C<YYYY-MM-DD> dates. An undefined date
+  means an open stint, which always wins.
+
+=cut
+
+sub later_date($first, $second) {
+    return undef if !defined $first || !defined $second;
+    return $first gt $second ? $first : $second;
+}
+
+=item copy_external_ids ( DBH, SQLA, KEEP_ID, DUP_IDS )
+
+  Copies the duplicate's external IDs to the canonical player for
+  every ID the canonical player is missing. Reports IDs that are set
+  on both players, since only the canonical one is kept.
+
+=cut
+
+sub copy_external_ids($dbh, $sqla, $keep_id, $dup_ids) {
+    my ($stmt, @bind) = $sqla->select(
+        -columns => \@external_ids,
+        -from    => 'players',
+        -where   => { id => $keep_id },
+    );
+
+    my $keep_ids = $dbh->selectrow_hashref($stmt, undef, @bind);
+
+    my %updates;
+
+    foreach my $column (@external_ids) {
+        next unless defined $dup_ids->{$column};
+
+        if (!defined $keep_ids->{$column}) {
+            $updates{$column} = $dup_ids->{$column};
+            next;
+        }
+
+        next if $keep_ids->{$column} == $dup_ids->{$column};
+
+        msg "  WARNING: conflicting $column ($keep_ids->{$column} kept, " .
+            "$dup_ids->{$column} discarded)";
+    }
+
+    return unless %updates;
+
+    ($stmt, @bind) = $sqla->update(
+        -table => 'players',
+        -set   => \%updates,
+        -where => { id => $keep_id },
+    );
+
+    $dbh->do($stmt, undef, @bind);
+
+    msg "  Copied " . join(', ', sort keys %updates) . " to player #$keep_id";
+
+    return;
+}
 
 =back
 
