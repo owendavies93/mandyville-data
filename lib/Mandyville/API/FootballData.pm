@@ -114,6 +114,8 @@ sub player($self, $id) {
 
             delete $self->cache->{$path};
             $response = $self->get($path);
+        } elsif ($response->{errorCode} == 404) {
+            croak "Not found: " . $response->{message};
         } else {
             die "Unknown error from API: $response->{message}";
         }

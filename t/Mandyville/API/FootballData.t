@@ -219,7 +219,8 @@ use Mandyville::API::FootballData;
         });
     });
 
-    throws_ok { $api->player(20) } qr/Unknown/, 'player: dies on unkown error';
+    throws_ok { $api->player(20) } qr/Not found/,
+                'player: croaks on v4 (errorCode) 404';
 
     $mock_ua->mock( 'get', sub {
         return $api->_get_tx({

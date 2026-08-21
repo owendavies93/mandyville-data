@@ -7,11 +7,16 @@ use Mandyville::Database;
 use Mandyville::Players;
 use Mandyville::Utils qw(msg);
 
+use Const::Fast;
 use Getopt::Long;
 use SQL::Abstract::More;
+use Time::HiRes qw(sleep);
 
 binmode(STDOUT, ':encoding(UTF-8)');
 binmode(STDERR, ':encoding(UTF-8)');
+
+const my $MAX_ATTEMPTS => 3;
+const my $RETRY_DELAY  => 3;
 
 my $limit   = 0;
 my $dry_run = 0;
@@ -51,23 +56,67 @@ my $rows = $dbh->selectall_arrayref($sql, { Slice => {} });
 msg "Backfilling date of birth for " . scalar(@$rows) . " players"
     . ($dry_run ? " (dry run)" : "");
 
-my $done = 0;
+my $done   = 0;
+my $failed = 0;
 foreach my $row (@$rows) {
     my $id    = $row->{id};
     my $fd_id = $row->{football_data_id};
 
-    my $dob = $api->player($fd_id)->{dateOfBirth};
+    my $dob = _fetch_dob($api, $fd_id, $id);
 
     if (defined $dob) {
         msg "player $id ($fd_id): $dob";
         $players->update_date_of_birth($id, $dob) unless $dry_run;
         $done++;
     } else {
-        msg "player $id ($fd_id): no dateOfBirth returned";
+        $failed++;
     }
 }
 
-msg "Set date of birth for $done players";
+msg "Set date of birth for $done players"
+    . ($failed ? " ($failed unresolved)" : "");
+
+# Fetch a player's date of birth, retrying on empty or failed responses.
+# Logs the reason and returns C<undef> when the DOB can't be determined,
+# so a single bad player never aborts the whole run. A 404 (the player no
+# longer exists in football-data) is not retried.
+sub _fetch_dob($api, $fd_id, $id) {
+    my $path = "persons/$fd_id";
+
+    for (my $attempt = 1; $attempt <= $MAX_ATTEMPTS; $attempt++) {
+        # Evict any cached response so a retry really re-hits the API.
+        delete $api->cache->{$path};
+
+        my $response = eval { $api->player($fd_id) };
+        my $err      = $@;
+
+        if ($err) {
+            # A 404 means the player no longer exists in football-data,
+            # so retrying won't help.
+            if ($err =~ /Not found/) {
+                msg "player $id ($fd_id): not found in football-data API";
+                return;
+            }
+
+            my $message = $err;
+            $message =~ s/\s*\n.*//s;   # keep just the first line
+            warn "player $id ($fd_id): attempt $attempt/$MAX_ATTEMPTS "
+                . "failed: $message\n";
+        } elsif (defined $response && ref $response eq 'HASH'
+                 && defined $response->{dateOfBirth}
+                 && $response->{dateOfBirth} =~ /\S/) {
+            return $response->{dateOfBirth};
+        } else {
+            warn "player $id ($fd_id): empty response, attempt "
+                . "$attempt/$MAX_ATTEMPTS\n";
+        }
+
+        sleep $RETRY_DELAY if $attempt < $MAX_ATTEMPTS;
+    }
+
+    msg "player $id ($fd_id): no dateOfBirth after $MAX_ATTEMPTS attempts";
+    return;
+}
 
 =head1 NAME
 
@@ -80,5 +129,11 @@ msg "Set date of birth for $done players";
   C<football_data_id> but no stored date of birth. Busiest players are
   processed first. Resumable and idempotent; use C<--limit N> to run in
   chunks (the football-data API is rate limited to ~30 req/min).
+
+  Empty or failed API responses (an empty body, a C<null> payload, or a
+  missing C<dateOfBirth>) are retried up to three times before the
+  player is skipped, so a transient error doesn't abort the whole run.
+  A 404 response (the player no longer exists in football-data) is
+  skipped immediately without retrying.
 
 =cut
