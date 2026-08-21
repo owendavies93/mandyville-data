@@ -9,13 +9,16 @@ use Mandyville::Countries;
 use Mandyville::Database;
 use Mandyville::Fixtures;
 use Mandyville::Gameweeks;
-use Mandyville::Utils qw(current_season debug);
+use Mandyville::PlayerName qw(
+    candidate_names name_variants normalise_name score_names
+);
+use Mandyville::Utils qw(current_season debug msg);
 
 use Const::Fast;
 use Carp;
+use DateTime;
 use List::Util qw(any);
 use SQL::Abstract::More;
-use Unicode::Normalize;
 
 const my $UNDERSTAT_MAPPINGS => {
     npxG      => 'npxg',
@@ -24,6 +27,11 @@ const my $UNDERSTAT_MAPPINGS => {
     xGBuildup => 'xg_buildup',
     xGChain   => 'xg_chain',
 };
+
+const my $MATCH_THRESHOLD         => 0.80;
+const my $MATCH_MARGIN            => 0.10;
+const my $SQUAD_LOOKBACK_DAYS     => 400;
+const my $JOIN_DATE_TOLERANCE_DAYS => 14;
 
 =head1 NAME
 
@@ -274,16 +282,36 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id, $star
     return $id;
 }
 
-=item add_unmatched_fpl_player ( FPL_INFO, SEASON )
+=item add_unmatched_fpl_player ( FPL_INFO, SEASON, [ CONTEXT ] )
 
   Log an unmatched FPL player to the C<fpl_unmatched_players> table.
   Uses the FPL C<code> (persistent ID) and C<SEASON> as the unique
   key. If the player already exists for that season, updates the name
-  fields.
+  and context fields rather than skipping. C<CONTEXT> is an optional
+  hashref with C<team_name>, C<reason> and C<suggestion> (a hashref
+  with C<player_id>, C<score> and C<db_name>) fields.
 
 =cut
 
-sub add_unmatched_fpl_player($self, $fpl_info, $season) {
+sub add_unmatched_fpl_player($self, $fpl_info, $season, $context = {}) {
+    my $suggestion = $context->{suggestion} // {};
+
+    my $values = {
+        fpl_code    => $fpl_info->{code},
+        first_name  => $fpl_info->{first_name},
+        second_name => $fpl_info->{second_name},
+        web_name    => $fpl_info->{web_name},
+        season      => $season,
+        fpl_team_id       => $fpl_info->{team},
+        fpl_team_name     => $context->{team_name},
+        element_type      => $fpl_info->{element_type},
+        birth_date        => $fpl_info->{birth_date},
+        team_join_date    => $fpl_info->{team_join_date},
+        suggested_player_id => $suggestion->{player_id},
+        suggested_score     => $suggestion->{score},
+        suggestion_reason   => $context->{reason},
+    };
+
     my ($stmt, @bind) = $self->sqla->select(
         -columns => 'id',
         -from    => 'fpl_unmatched_players',
@@ -295,18 +323,21 @@ sub add_unmatched_fpl_player($self, $fpl_info, $season) {
 
     my ($id) = $self->dbh->selectrow_array($stmt, undef, @bind);
 
-    if (!defined $id) {
+    if (defined $id) {
+        ($stmt, @bind) = $self->sqla->update(
+            -table => 'fpl_unmatched_players',
+            -set   => {
+                %$values,
+                updated_at => \'now()',
+            },
+            -where => { id => $id },
+        );
+        $self->dbh->do($stmt, undef, @bind);
+    } else {
         ($stmt, @bind) = $self->sqla->insert(
             -into   => 'fpl_unmatched_players',
-            -values => {
-                fpl_code    => $fpl_info->{code},
-                first_name  => $fpl_info->{first_name},
-                second_name => $fpl_info->{second_name},
-                web_name    => $fpl_info->{web_name},
-                season      => $season,
-            },
+            -values => $values,
         );
-
         $self->dbh->do($stmt, undef, @bind);
     }
 
@@ -332,200 +363,596 @@ sub remove_unmatched_fpl_player($self, $fpl_code, $season) {
     return $self->dbh->do($stmt, undef, @bind);
 }
 
-=item find_player_by_fpl_info ( FPL_INFO )
+=item find_player_by_fpl_info ( FPL_INFO, [ CONTEXT ] )
 
   Attempt to find a player in the mandyville database based on their
-  info in the FPL API. Takes the following steps:
+  info in the FPL API. Returns a hashref:
 
-  * Check first name and last name for exact matches
-  * Check 'web name' (usually surname but sometimes common name) for an
-    exact match with surname and a match (partial or exact) with first
-    name)
-  * Check split of 'web name' against first name and last name
-  * Check 'web name' against last name only (with first name
-    disambiguation if multiple matches)
-  * Strip initial prefixes (e.g. 'B.Fernandes' -> 'Fernandes') and
-    retry matching
-  * Accent-insensitive matching on first and last name
-  * Swap first and last name to handle reversed name order
-  * Strip dot suffixes (e.g. 'Kroupi.Jr' -> 'Kroupi') and retry
-  * Match single-name players by web_name
-  * Split hyphenated surnames and match on components
+    { matched => 1, id, first_name, last_name, method, score,
+      corroboration, fpl_id_conflict }
 
-  If no match is found among Premier League players, broadens the
-  search to all players in the database (e.g. players who joined
-  from other tracked leagues).
+  or, when no match is made:
 
-  Only matches on players that played a game tracked in the database.
+    { matched => 0, reason, suggestion }
+
+  where C<reason> is one of C<no_match>, C<ambiguous>,
+  C<uncorroborated>, C<dob_mismatch> or C<fpl_id_conflict>, and
+  C<suggestion> carries the best candidate with C<player_id>, C<score>,
+  C<db_name> and C<fpl_id_conflict> fields.
+
+  First decisive stage wins:
+
+  * match on C<players.fpl_id>
+  * match an C<fpl_names> alias
+  * exact normalised full-name match, scoped to the FPL team's squad,
+    then Premier League players, then all players
+  * scored fuzzy match within the squad
+  * scored fuzzy match over Premier League, then all players
+
+  C<CONTEXT> is an optional hashref with C<team_id> (mandyville team
+  id) and C<date> (YYYY-MM-DD) fields, used to scope the search to the
+  player's current club and to corroborate fuzzy matches.
 
 =cut
 
-sub find_player_by_fpl_info($self, $fpl_info) {
-    my $combined_name = $fpl_info->{first_name} . ' ' .
-                        $fpl_info->{second_name};
+sub find_player_by_fpl_info($self, $fpl_info, $context = {}) {
+    my $fpl_id  = $fpl_info->{code};
+    my $team_id = $context->{team_id};
+    my $date    = $context->{date};
 
-    my ($stmt, @bind) = $self->sqla->select(
-        -columns => [qw(p.id p.first_name p.last_name)],
-        -from    => [-join => qw(
-            players|p <=>{p.id=f.player_id} fpl_names|f
-        )],
-        -where   => {
-            'f.name' => $combined_name,
-        }
+    my $variants = name_variants($fpl_info);
+
+    if (defined $fpl_id) {
+        my $hit = $self->_player_by_fpl_id($fpl_id);
+        return $self->_match_result($hit, 'fpl_id', 1.0, [], $fpl_id)
+            if $hit;
+    }
+
+    my $alias = $self->_match_fpl_name($variants);
+    return $self->_match_result($alias, 'alias', 1.0, [], $fpl_id)
+        if $alias;
+
+    my $squad = defined $team_id
+        ? $self->get_squad_for_team($team_id, $date)
+        : [];
+
+    my @scopes = (
+        $squad,
+        $self->get_pl_players(),
+        $self->get_all_players_with_names(),
     );
 
-    my ($result) = $self->dbh->selectrow_hashref($stmt, { Slice => {} }, @bind);
+    # Exact matches across all scopes first: an exact name match in a
+    # broader scope must win over a fuzzy match in a narrower one.
+    foreach my $candidates (@scopes) {
+        my $exact = $self->_exact_match(
+            $candidates, $fpl_info, $team_id, $date, $fpl_id
+        );
+        return $exact if $exact->{matched};
 
-    return $result if defined $result;
+        # Ambiguity and conflicts on an exact full-name match are
+        # scope-independent: a superset can only add more collisions.
+        return $exact if $exact->{reason} eq 'ambiguous';
+        return $exact if $exact->{reason} eq 'fpl_id_conflict';
+    }
 
-    my %query = (
-        -columns  => [qw(p.id p.first_name p.last_name)],
-        -from     => [-join => qw(
+    # Fuzzy matches across all scopes. Unlike exact matches, a wider
+    # scope can surface a clearer top candidate, so every non-match is
+    # carried as a fallback and the best one returned at the end.
+    my $best_fallback;
+    foreach my $candidates (@scopes) {
+        my $fuzzy = $self->_fuzzy_match(
+            $variants, $candidates, $fpl_info, $team_id, $date, $fpl_id
+        );
+        return $fuzzy if $fuzzy->{matched};
+
+        $best_fallback = $self->_better_unmatched($best_fallback, $fuzzy);
+    }
+
+    return $best_fallback // { matched => 0, reason => 'no_match' };
+}
+
+=item get_squad_for_team ( TEAM_ID, [ DATE ] )
+
+  Return the candidate hashrefs for the squad of the team given by
+  C<TEAM_ID> as of C<DATE> (defaults to today): players with a
+  C<players_teams> stint covering C<DATE>, plus players with a
+  C<players_fixtures> row for the team within the last
+  C<SQUAD_LOOKBACK_DAYS> days. Each candidate is marked with an
+  C<in_squad> flag. Cached per team for the life of the object.
+
+=cut
+
+sub get_squad_for_team($self, $team_id, $date = undef) {
+    $date //= DateTime->today->ymd;
+
+    return $self->{_squad_cache}{$team_id}
+        if exists $self->{_squad_cache}{$team_id};
+
+    my $lookback =
+        DateTime->today->subtract(days => $SQUAD_LOOKBACK_DAYS)->ymd;
+
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => [qw(p.id p.first_name p.last_name p.date_of_birth p.fpl_id)],
+        -from    => [-join => qw(
+            players|p <=>{p.id=pt.player_id} players_teams|pt
+        )],
+        -where   => {
+            -and => [
+                { 'pt.team_id'     => $team_id },
+                { 'pt.start_date'  => { '<=' => $date } },
+                { '-or' => [
+                    { 'pt.end_date' => { '>' => $date } },
+                    { 'pt.end_date' => undef },
+                ] },
+            ],
+        },
+    );
+
+    my $stint_players =
+        $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+
+    ($stmt, @bind) = $self->sqla->select(
+        -columns => [qw(p.id p.first_name p.last_name p.date_of_birth p.fpl_id)],
+        -from    => [-join => qw(
+            players|p <=>{p.id=pf.player_id} players_fixtures|pf
+                      <=>{pf.fixture_id=f.id} fixtures|f
+        )],
+        -where   => {
+            'pf.team_id'     => $team_id,
+            'f.fixture_date' => { '>=' => $lookback },
+        },
+    );
+
+    my $fixture_players =
+        $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+
+    my %by_id;
+    foreach my $row (@$stint_players, @$fixture_players) {
+        $by_id{ $row->{id} } = $row;
+    }
+
+    my $squad = $self->_candidates_from_rows([values %by_id]);
+    $_->{in_squad} = 1 for @$squad;
+
+    $self->{_squad_cache}{$team_id} = $squad;
+    return $squad;
+}
+
+=item get_pl_players ( )
+
+  Return the candidate hashrefs for every player with a fixture in the
+  English Premier League. Cached for the life of the object.
+
+=cut
+
+sub get_pl_players($self) {
+    return $self->{_pl_players_cache} if $self->{_pl_players_cache};
+
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns =>
+            [-distinct => qw(p.id p.first_name p.last_name p.date_of_birth p.fpl_id)],
+        -from    => [-join => qw(
             players|p <=>{p.id=pf.player_id}     players_fixtures|pf
                       <=>{pf.fixture_id=f.id}    fixtures|f
                       <=>{f.competition_id=c.id} competitions|c
                       <=>{c.country_id=co.id}    countries|co
         )],
-        -where    => {
-            'c.name'       => 'Premier League',
-            'co.name'      => 'England',
-            'p.first_name' => $fpl_info->{first_name},
-            'p.last_name'  => $fpl_info->{second_name},
+        -where   => {
+            'c.name'  => 'Premier League',
+            'co.name' => 'England',
         },
-        -group_by => 'p.id',
     );
 
-    ($stmt, @bind) = $self->sqla->select(%query);
+    my $rows = $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+    $self->{_pl_players_cache} = $self->_candidates_from_rows($rows);
+    return $self->{_pl_players_cache};
+}
 
-    my $matches =
-        $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+=item get_all_players_with_names ( )
 
-    if (scalar @$matches == 1) {
-        return $matches->[0];
-    } elsif (scalar @$matches > 1) {
-        die 'Multiple matches, bailing out';
+  Return the candidate hashrefs for every player with at least one
+  C<players_fixtures> row. Cached for the life of the object.
+
+=cut
+
+sub get_all_players_with_names($self) {
+    return $self->{_all_players_cache} if $self->{_all_players_cache};
+
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns =>
+            [-distinct => qw(p.id p.first_name p.last_name p.date_of_birth p.fpl_id)],
+        -from    => [-join => qw(
+            players|p <=>{p.id=pf.player_id} players_fixtures|pf
+        )],
+    );
+
+    my $rows = $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+    $self->{_all_players_cache} = $self->_candidates_from_rows($rows);
+    return $self->{_all_players_cache};
+}
+
+=item find_by_date_of_birth ( DOB )
+
+  Return the candidate hashrefs for every player whose
+  C<date_of_birth> equals C<DOB> (YYYY-MM-DD). Used to corroborate or
+  disambiguate fuzzy name matches.
+
+=cut
+
+sub find_by_date_of_birth($self, $dob) {
+    return [] unless defined $dob;
+
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => [qw(id first_name last_name date_of_birth fpl_id)],
+        -from    => 'players',
+        -where   => { date_of_birth => $dob },
+    );
+
+    my $rows = $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+    return $self->_candidates_from_rows($rows);
+}
+
+=item update_date_of_birth ( PLAYER_ID, DOB )
+
+  Set the C<date_of_birth> of C<PLAYER_ID> to C<DOB> when it is not
+  already set. Returns C<1> if set, C<0> if already set to the same
+  value, C<-1> if already set to a different value (left unchanged).
+
+=cut
+
+sub update_date_of_birth($self, $player_id, $dob) {
+    return 0 unless defined $dob;
+
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'date_of_birth',
+        -from    => 'players',
+        -where   => { id => $player_id },
+    );
+
+    my ($existing) = $self->dbh->selectrow_array($stmt, undef, @bind);
+
+    return 0  if defined $existing && $existing eq $dob;
+    return -1 if defined $existing && $existing ne $dob;
+
+    ($stmt, @bind) = $self->sqla->update(
+        -table => 'players',
+        -set   => { date_of_birth => $dob },
+        -where => { id => $player_id },
+    );
+
+    return $self->dbh->do($stmt, undef, @bind);
+}
+
+=item get_open_stint_start ( PLAYER_ID )
+
+  Return the C<start_date> of the player's open C<players_teams> stint
+  (the stint with no C<end_date>), or C<undef> if none exists.
+
+=cut
+
+sub get_open_stint_start($self, $player_id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'start_date',
+        -from    => 'players_teams',
+        -where   => {
+            player_id => $player_id,
+            end_date  => undef,
+        },
+        -order_by => 'start_date DESC',
+        -limit    => 1,
+    );
+
+    my ($start) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    return $start;
+}
+
+sub _player_by_fpl_id($self, $fpl_id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => [qw(id first_name last_name date_of_birth fpl_id)],
+        -from    => 'players',
+        -where   => { fpl_id => $fpl_id },
+    );
+
+    my ($row) = $self->dbh->selectrow_hashref($stmt, { Slice => {} }, @bind);
+    return unless $row;
+
+    return $self->_candidates_from_rows([$row])->[0];
+}
+
+sub _match_fpl_name($self, $variants) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => [qw(f.name p.id p.first_name p.last_name p.date_of_birth p.fpl_id)],
+        -from    => [-join => qw(
+            fpl_names|f <=>{f.player_id=p.id} players|p
+        )],
+    );
+
+    my $rows = $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+    my %by_name;
+    foreach my $row (@$rows) {
+        $by_name{ normalise_name($row->{name}) } = $row;
     }
 
-    my ($first_first_name) = $fpl_info->{first_name} =~ /^(\w+)\s/;
-
-    $query{'-where'}->{'p.last_name'}  = $fpl_info->{web_name};
-    $query{'-where'}->{'p.first_name'} = $first_first_name;
-
-    ($stmt, @bind) = $self->sqla->select(%query);
-
-    $matches = $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
-
-    if (scalar @$matches == 1) {
-        return $matches->[0];
-    } elsif (scalar @$matches > 1) {
-        die 'Multiple matches, bailing out';
-    }
-
-    if ($fpl_info->{web_name} =~ /\s/) {
-        my ($first, $last) = $fpl_info->{web_name} =~ /(\w+)\s+(.+)$/;
-
-        $query{'-where'}->{'p.first_name'} = $first;
-        $query{'-where'}->{'p.last_name'}  = $last;
-
-        ($stmt, @bind) = $self->sqla->select(%query);
-
-        $matches =
-            $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
-
-        if (scalar @$matches == 1) {
-            return $matches->[0];
-        } elsif (scalar @$matches > 1) {
-            die 'Multiple matches, bailing out';
+    foreach my $variant (@$variants) {
+        if (my $row = $by_name{$variant}) {
+            return $self->_candidates_from_rows([$row])->[0];
         }
     }
 
-    # Try web_name as last_name directly
-    $query{'-where'}->{'p.last_name'} = $fpl_info->{web_name};
-    delete $query{'-where'}->{'p.first_name'};
+    return;
+}
 
-    ($stmt, @bind) = $self->sqla->select(%query);
+sub _candidates_from_rows($self, $rows) {
+    return [
+        map {
+            {
+                id            => $_->{id},
+                first_name    => $_->{first_name},
+                last_name     => $_->{last_name},
+                date_of_birth => $_->{date_of_birth},
+                fpl_id        => $_->{fpl_id},
+                names         => candidate_names($_->{first_name}, $_->{last_name}),
+            }
+        } @$rows
+    ];
+}
 
-    $matches =
-        $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
+sub _exact_match($self, $candidates, $fpl_info, $team_id, $date, $fpl_id) {
+    my %variant_set =
+        map { $_ => 1 } @{ $self->_exact_variants($fpl_info) };
 
-    if (scalar @$matches == 1) {
-        return $matches->[0];
-    }
+    my @exact;
+    foreach my $c (@$candidates) {
+        my $name = $c->{names}[0];
+        next unless defined $name;
 
-    # Try web_name as last_name with first word of first_name
-    if (scalar @$matches > 1) {
-        my ($fn) = $fpl_info->{first_name} =~ /^(\S+)/;
-        if (defined $fn) {
-            my @filtered = grep {
-                $_->{first_name} eq $fn
-            } @$matches;
-
-            return $filtered[0] if scalar @filtered == 1;
+        if ($variant_set{$name}) {
+            push @exact, { candidate => $c, score => 1.0 };
         }
     }
 
-    # Strip initial prefix from web_name (e.g. B.Fernandes -> Fernandes)
-    # and retry as last_name
-    if ($fpl_info->{web_name} =~ /^[A-Z]\.(.+)$/) {
-        my $stripped = $1;
+    return { matched => 0, reason => 'no_match' } if !@exact;
 
-        $query{'-where'}->{'p.last_name'} = $stripped;
-        delete $query{'-where'}->{'p.first_name'};
+    my $winner;
+    if (@exact == 1) {
+        $winner = $exact[0];
+    } else {
+        $winner = $self->_resolve_ambiguous(\@exact, $fpl_info, $team_id, $date);
 
-        ($stmt, @bind) = $self->sqla->select(%query);
+        if (!$winner) {
+            if ($team_id && grep { $_->{candidate}{in_squad} } @exact) {
+                my @ids = map { $_->{candidate}{id} } @exact;
+                msg "Possible duplicate players for '"
+                    . $fpl_info->{first_name} . ' '
+                    . $fpl_info->{second_name}
+                    . "': " . join(' / ', @ids);
+            }
 
-        $matches =
-            $self->dbh->selectall_arrayref($stmt, { Slice => {} }, @bind);
-
-        if (scalar @$matches == 1) {
-            return $matches->[0];
-        }
-
-        if (scalar @$matches > 1) {
-            my ($initial) = $fpl_info->{web_name} =~ /^([A-Z])\./;
-            my @filtered = grep {
-                $_->{first_name} =~ /^\Q$initial\E/i
-            } @$matches;
-
-            return $filtered[0] if scalar @filtered == 1;
+            return $self->_unmatched_result('ambiguous', $exact[0], $fpl_id);
         }
     }
 
-    # Fetch all PL players for fuzzy matching
-    $query{'-where'} = {
-        'c.name'  => 'Premier League',
-        'co.name' => 'England',
+    if (my $conflict = $self->_fpl_id_conflict($winner->{candidate}, $fpl_id)) {
+        return $self->_unmatched_result('fpl_id_conflict', $winner, $fpl_id);
+    }
+
+    return $self->_match_result($winner->{candidate}, 'exact', 1.0, ['name'], $fpl_id);
+}
+
+sub _fuzzy_match($self, $variants, $candidates, $fpl_info, $team_id, $date, $fpl_id) {
+    my $scored = $self->_score_candidates($variants, $candidates);
+    return { matched => 0, reason => 'no_match' } if !@$scored;
+
+    my $top    = $scored->[0];
+    my $second = $scored->[1];
+
+    return { matched => 0, reason => 'no_match' }
+        if $top->{score} < $MATCH_THRESHOLD;
+
+    my $second_score = $second ? $second->{score} : 0;
+    return $self->_unmatched_result('ambiguous', $top, $fpl_id)
+        if $top->{score} - $second_score < $MATCH_MARGIN;
+
+    my ($evidence, $ok) =
+        $self->_corroborate($top->{candidate}, $fpl_info, $team_id);
+
+    return $self->_unmatched_result('dob_mismatch', $top, $fpl_id) if !$ok;
+    return $self->_unmatched_result('uncorroborated', $top, $fpl_id)
+        if !@$evidence;
+
+    if (my $conflict = $self->_fpl_id_conflict($top->{candidate}, $fpl_id)) {
+        return $self->_unmatched_result('fpl_id_conflict', $top, $fpl_id);
+    }
+
+    return $self->_match_result(
+        $top->{candidate}, 'fuzzy', $top->{score}, $evidence, $fpl_id
+    );
+}
+
+sub _exact_variants($self, $fpl_info) {
+    my $first  = $fpl_info->{first_name}  // '';
+    my $second = $fpl_info->{second_name} // '';
+    my $web    = $fpl_info->{web_name}    // '';
+
+    my @variants;
+
+    push @variants, normalise_name("$first $second");
+    push @variants, normalise_name("$second $first")
+        if length $first && length $second;
+
+    # First word of a compound first name plus web name.
+    if ($first =~ /^(\S+)\s/ && length $web) {
+        push @variants, normalise_name("$1 $web");
+    }
+
+    # A multi-word web_name is a full name (e.g. "Juanlu Sánchez").
+    push @variants, normalise_name($web) if $web =~ /\s/;
+
+    my %seen;
+    return [ grep { length $_ && !$seen{$_}++ } @variants ];
+}
+
+sub _score_candidates($self, $variants, $candidates) {
+    my @scored;
+
+    foreach my $c (@$candidates) {
+        push @scored, {
+            candidate => $c,
+            score     => score_names($variants, $c->{names}),
+        };
+    }
+
+    return [ sort { $b->{score} <=> $a->{score} } @scored ];
+}
+
+sub _resolve_ambiguous($self, $matches, $fpl_info, $team_id, $date) {
+    my $fpl_dob = $fpl_info->{birth_date};
+
+    if (defined $fpl_dob) {
+        my @dob = grep {
+            defined $_->{candidate}{date_of_birth}
+                && $_->{candidate}{date_of_birth} eq $fpl_dob
+        } @$matches;
+        return $dob[0] if @dob == 1;
+    }
+
+    if (defined $team_id) {
+        my @squad = grep { $_->{candidate}{in_squad} } @$matches;
+        return $squad[0] if @squad == 1;
+    }
+
+    if (defined $team_id && defined $fpl_info->{team_join_date}) {
+        my @by_join;
+        foreach my $m (@$matches) {
+            my $start =
+                $self->_stint_start_for_team($m->{candidate}{id}, $team_id);
+
+            push @by_join, $m
+                if defined $start
+                && $self->_days_between($start, $fpl_info->{team_join_date})
+                    <= $JOIN_DATE_TOLERANCE_DAYS;
+        }
+        return $by_join[0] if @by_join == 1;
+    }
+
+    return;
+}
+
+sub _corroborate($self, $candidate, $fpl_info, $team_id) {
+    my @evidence;
+
+    my $fpl_dob = $fpl_info->{birth_date};
+    my $db_dob  = $candidate->{date_of_birth};
+
+    if (defined $fpl_dob && defined $db_dob) {
+        if ($fpl_dob eq $db_dob) {
+            push @evidence, 'dob';
+        } else {
+            return ([], 0);
+        }
+    }
+
+    if (defined $team_id && $candidate->{in_squad}) {
+        push @evidence, 'team';
+    }
+
+    if (defined $team_id && defined $fpl_info->{team_join_date}) {
+        my $start = $self->_stint_start_for_team($candidate->{id}, $team_id);
+
+        if (defined $start
+            && $self->_days_between($start, $fpl_info->{team_join_date})
+                <= $JOIN_DATE_TOLERANCE_DAYS) {
+            push @evidence, 'join_date';
+        }
+    }
+
+    return (\@evidence, 1);
+}
+
+sub _stint_start_for_team($self, $player_id, $team_id) {
+    my ($stmt, @bind) = $self->sqla->select(
+        -columns => 'start_date',
+        -from    => 'players_teams',
+        -where   => {
+            player_id => $player_id,
+            team_id   => $team_id,
+        },
+        -order_by => 'start_date DESC',
+        -limit    => 1,
+    );
+
+    my ($start) = $self->dbh->selectrow_array($stmt, undef, @bind);
+    return $start;
+}
+
+sub _days_between($self, $a, $b) {
+    return 1e9 unless defined $a && defined $b;
+
+    my ($y1, $m1, $d1) = split /-/, $a;
+    my ($y2, $m2, $d2) = split /-/, $b;
+
+    my $da = DateTime->new(year => $y1, month => $m1, day => $d1);
+    my $db = DateTime->new(year => $y2, month => $m2, day => $d2);
+
+    return abs($da->delta_days($db)->in_units('days'));
+}
+
+sub _fpl_id_conflict($self, $candidate, $fpl_id) {
+    return 0 unless defined $fpl_id && defined $candidate->{fpl_id};
+    return 0 if $candidate->{fpl_id} == $fpl_id;
+    return $candidate->{fpl_id};
+}
+
+sub _match_result($self, $candidate, $method, $score, $evidence, $fpl_id) {
+    return {
+        matched         => 1,
+        id              => $candidate->{id},
+        first_name      => $candidate->{first_name},
+        last_name       => $candidate->{last_name},
+        method          => $method,
+        score           => $score,
+        corroboration   => $evidence,
+        fpl_id_conflict => $self->_fpl_id_conflict($candidate, $fpl_id),
+    };
+}
+
+sub _unmatched_result($self, $reason, $scored = undef, $fpl_id = undef) {
+    my $result = { matched => 0, reason => $reason };
+
+    if ($scored) {
+        my $c = $scored->{candidate};
+        $result->{suggestion} = {
+            player_id       => $c->{id},
+            score           => $scored->{score},
+            db_name         => ($c->{first_name} // '') . ' ' . ($c->{last_name} // ''),
+            fpl_id_conflict => $self->_fpl_id_conflict($c, $fpl_id),
+        };
+    }
+
+    return $result;
+}
+
+sub _better_unmatched($self, $a, $b) {
+    return $a // $b unless $a && $b;
+
+    my $rank = sub {
+        my ($r) = @_;
+        return 0 if $r->{reason} eq 'no_match';
+        return 1 if $r->{reason} eq 'uncorroborated';
+        return 2 if $r->{reason} eq 'ambiguous';
+        return 3 if $r->{reason} eq 'dob_mismatch';
+        return 4 if $r->{reason} eq 'fpl_id_conflict';
+        return 0;
     };
 
-    ($stmt, @bind) = $self->sqla->select(%query);
+    my ($ra, $rb) = ($rank->($a), $rank->($b));
+    return $b if $rb > $ra;
+    return $a if $ra > $rb;
 
-    my $all_pl = $self->dbh->selectall_arrayref(
-        $stmt, { Slice => {} }, @bind
-    );
-
-    my $pl_result = $self->_fuzzy_match_candidates($fpl_info, $all_pl);
-    return $pl_result if defined $pl_result;
-
-    # Broaden search to all players in the database
-    if (!defined $self->{_all_players_cache}) {
-        ($stmt, @bind) = $self->sqla->select(
-            -columns  => [-distinct => qw(p.id p.first_name p.last_name)],
-            -from     => [-join => qw(
-                players|p <=>{p.id=pf.player_id} players_fixtures|pf
-            )],
-        );
-
-        $self->{_all_players_cache} = $self->dbh->selectall_arrayref(
-            $stmt, { Slice => {} }, @bind
-        );
-    }
-
-    my $all_players = $self->{_all_players_cache};
-
-    my $broad_result = $self->_fuzzy_match_candidates($fpl_info, $all_players);
-    return $broad_result if defined $broad_result;
-
-    die 'No match found';
+    my $sa = $a->{suggestion}{score} // 0;
+    my $sb = $b->{suggestion}{score} // 0;
+    return $sb > $sa ? $b : $a;
 }
 
 =item find_understat_id ( ID )
@@ -671,14 +1098,19 @@ sub get_or_insert($self, $football_data_id, $player_info) {
             };
         }
 
+        my %values = (
+            first_name       => $player_info->{first_name},
+            last_name        => $player_info->{last_name},
+            country_id       => $country_id,
+            football_data_id => $football_data_id,
+        );
+
+        $values{date_of_birth} = $player_info->{dateOfBirth}
+            if defined $player_info->{dateOfBirth};
+
         ($stmt, @bind) = $self->sqla->insert(
             -into      => 'players',
-            -values    => {
-                first_name       => $player_info->{first_name},
-                last_name        => $player_info->{last_name},
-                country_id       => $country_id,
-                football_data_id => $football_data_id,
-            },
+            -values    => \%values,
             -returning => 'id',
         );
 
@@ -1063,7 +1495,8 @@ sub update_fixture_info($self, $fixture_data) {
 =item update_fpl_id ( PLAYER_ID, FPL_ID )
 
   Set the FPL entity ID for the player corresponding to C<PLAYER_ID>
-  to C<FPL_ID>, if it doesn't already exist.
+  to C<FPL_ID>. Returns C<1> if set, C<0> if already set to the same
+  code, or C<-1> if already set to a different code (left unchanged).
 
 =cut
 
@@ -1078,7 +1511,8 @@ sub update_fpl_id($self, $player_id, $fpl_id) {
 
     my ($result) = $self->dbh->selectrow_array($stmt, undef, @bind);
 
-    return 0 if defined $result;
+    return 0  if defined $result && $result == $fpl_id;
+    return -1 if defined $result;
 
     ($stmt, @bind) = $self->sqla->update(
         -table => 'players',
@@ -1225,6 +1659,7 @@ sub _get_api_info_and_store($self, $player_id) {
         first_name   => $player_info->{firstName},
         last_name    => $player_info->{lastName},
         country_name => $player_info->{nationality},
+        dateOfBirth  => $player_info->{dateOfBirth},
     };
     # TODO: Add insert only mode to save a query
     my $id = $self->get_or_insert($player_id, $to_insert);
@@ -1262,84 +1697,6 @@ sub _get_position_id($self, $position) {
     return $id;
 }
 
-sub _fuzzy_match_candidates($self, $fpl_info, $candidates) {
-    my $stripped_first = $self->_strip_accents($fpl_info->{first_name});
-    my $stripped_last  = $self->_strip_accents($fpl_info->{second_name});
-    my $stripped_web   = $self->_strip_accents($fpl_info->{web_name});
-
-    # Accent-insensitive first + last name
-    my @matches = grep {
-        $self->_strip_accents($_->{first_name}) eq $stripped_first &&
-        $self->_strip_accents($_->{last_name})  eq $stripped_last
-    } @$candidates;
-
-    return $matches[0] if scalar @matches == 1;
-
-    # Web name accent-insensitive as last_name
-    @matches = grep {
-        $self->_strip_accents($_->{last_name}) eq $stripped_web
-    } @$candidates;
-
-    return $matches[0] if scalar @matches == 1;
-
-    # Strip dot suffix from web_name (e.g. Kroupi.Jr -> Kroupi)
-    if ($fpl_info->{web_name} =~ /^(.+)\.[A-Za-z]{1,2}$/) {
-        my $stripped = $1;
-
-        my @suffix_matches = grep {
-            $self->_strip_accents($_->{last_name}) eq
-            $self->_strip_accents($stripped)
-        } @$candidates;
-
-        return $suffix_matches[0] if scalar @suffix_matches == 1;
-    }
-
-    # Reversed name order
-    my @reversed = grep {
-        $self->_strip_accents($_->{first_name}) eq $stripped_last &&
-        $self->_strip_accents($_->{last_name})  eq $stripped_first
-    } @$candidates;
-
-    return $reversed[0] if scalar @reversed == 1;
-
-    # Single-name players by web_name
-    my @single = grep {
-        ($_->{last_name} eq '' &&
-         $self->_strip_accents($_->{first_name}) eq $stripped_web) ||
-        ($_->{first_name} eq '' &&
-         $self->_strip_accents($_->{last_name}) eq $stripped_web)
-    } @$candidates;
-
-    return $single[0] if scalar @single == 1;
-
-    # Hyphenated surname components
-    if ($fpl_info->{second_name} =~ /-/) {
-        my @parts = split(/-/, $fpl_info->{second_name});
-
-        foreach my $part (@parts) {
-            my $stripped_part = $self->_strip_accents($part);
-            my @hyphen_matches = grep {
-                $self->_strip_accents($_->{first_name}) eq $stripped_first &&
-                $self->_strip_accents($_->{last_name}) eq $stripped_part
-            } @$candidates;
-
-            return $hyphen_matches[0] if scalar @hyphen_matches == 1;
-        }
-    }
-
-    # Check if DB has hyphenated surname containing the FPL last name
-    my @db_hyphen = grep {
-        $_->{last_name} =~ /-/ &&
-        $self->_strip_accents($_->{first_name}) eq $stripped_first &&
-        any { $self->_strip_accents($_) eq $stripped_last }
-            split(/-/, $_->{last_name})
-    } @$candidates;
-
-    return $db_hyphen[0] if scalar @db_hyphen == 1;
-
-    return;
-}
-
 sub _find_hyphen_duplicate($self, $first_name, $last_name, $country_id) {
     my ($stmt, @bind) = $self->sqla->select(
         -columns => [qw(id first_name last_name)],
@@ -1370,13 +1727,6 @@ sub _find_hyphen_duplicate($self, $first_name, $last_name, $country_id) {
     return;
 }
 
-sub _strip_accents($self, $str) {
-    return '' unless defined $str;
-    my $decomposed = NFKD($str);
-    $decomposed =~ s/\p{Mn}//g;
-    return $decomposed;
-}
-
 sub _sanitise_name($self, $player_info) {
     my $first = $player_info->{firstName};
     my $last  = $player_info->{lastName};
@@ -1397,6 +1747,7 @@ sub _sanitise_name($self, $player_info) {
         lastName    => $last,
         name        => $full,
         nationality => $player_info->{nationality},
+        dateOfBirth => $player_info->{dateOfBirth},
     };
 }
 

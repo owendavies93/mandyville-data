@@ -439,13 +439,13 @@ use Mandyville::Players;
         web_name    => 'Testing Testing',
     };
 
-    throws_ok { $players->find_player_by_fpl_info($fpl_info) } qr/No match/,
-                'find_player_by_fpl_info: dies on no match';
+    $info = $players->find_player_by_fpl_info($fpl_info);
+    ok( !$info->{matched}, 'find_player_by_fpl_info: returns no match' );
 
     $fpl_info->{web_name} = 'Test';
 
-    throws_ok { $players->find_player_by_fpl_info($fpl_info) } qr/No match/,
-                'find_player_by_fpl_info: dies on no match';
+    $info = $players->find_player_by_fpl_info($fpl_info);
+    ok( !$info->{matched}, 'find_player_by_fpl_info: returns no match' );
 
     my $player_id = 1;
     $db->rw_db_handle->do(qq(
@@ -455,8 +455,22 @@ use Mandyville::Players;
 
     $info = $players->find_player_by_fpl_info($fpl_info);
 
+    ok( $info->{matched}, 'find_player_by_fpl_info: matches via fpl_names' );
     cmp_ok( $info->{id}, '==', $player_id,
             'find_player_by_fpl_info: returns correct values after mapping' );
+
+    # update_fpl_id now returns -1 when a different code is already set.
+    $players->update_fpl_id($player_id, 5);   # ensure a code is present
+    cmp_ok( $players->update_fpl_id($player_id, 999), '==', -1,
+            'update_fpl_id: returns -1 on conflicting fpl_id' );
+
+    # update_date_of_birth set / same / conflict.
+    cmp_ok( $players->update_date_of_birth($player_id, '1990-01-01'), '==', 1,
+            'update_date_of_birth: sets when unset' );
+    cmp_ok( $players->update_date_of_birth($player_id, '1990-01-01'), '==', 0,
+            'update_date_of_birth: no-op when already the same' );
+    cmp_ok( $players->update_date_of_birth($player_id, '1991-01-01'), '==', -1,
+            'update_date_of_birth: returns -1 on conflict' );
 
     dies_ok { $players->add_fpl_season_info }
               'add_fpl_season_info: dies without args';
@@ -560,6 +574,9 @@ use Mandyville::Players;
     ok( !$players->get_player_team($player_id),
         'get_player_team: returns undef with no stints' );
 
+    ok( !defined $players->get_open_stint_start($player_id),
+        'get_open_stint_start: undef with no stints' );
+
     # First stint
     my $changed = $players->update_player_team($player_id, $team_a, '2020-08-01');
 
@@ -568,6 +585,9 @@ use Mandyville::Players;
 
     cmp_ok( $players->get_player_team($player_id), '==', $team_a,
             'get_player_team: returns current team' );
+
+    cmp_ok( $players->get_open_stint_start($player_id), 'eq', '2020-08-01',
+            'get_open_stint_start: returns open stint start date' );
 
     # Same team is a no-op
     $changed = $players->update_player_team($player_id, $team_a, '2020-08-10');
@@ -711,6 +731,97 @@ use Mandyville::Players;
 
     cmp_ok( $info->{lastName}, 'eq', 'El Mokeddem',
             '_sanitise_name: correct last name' );
+}
+
+######
+# TEST add_unmatched_fpl_player, remove_unmatched_fpl_player
+######
+
+{
+    my $db   = Mandyville::Database->new;
+    my $sqla = SQL::Abstract::More->new;
+
+    my $players = Mandyville::Players->new({
+        dbh  => $db->rw_db_handle(),
+        sqla => $sqla,
+    });
+
+    my $target_id = $players->get_or_insert(9002, {
+        first_name   => 'Suggest',
+        last_name    => 'Target',
+        country_name => 'England',
+    })->{id};
+
+    my $fpl_info = {
+        code           => 123456,
+        first_name     => 'No',
+        second_name    => 'Match',
+        web_name       => 'Match',
+        team           => 42,
+        element_type   => 2,
+        birth_date     => '2000-01-01',
+        team_join_date => '2026-01-01',
+    };
+
+    $players->add_unmatched_fpl_player($fpl_info, 2026, {
+        team_name  => 'Test FC',
+        reason     => 'no_match',
+        suggestion => {
+            player_id => $target_id,
+            score     => 0.5,
+            db_name   => 'Suggest Target',
+        },
+    });
+
+    my $row = $db->rw_db_handle->selectrow_hashref(
+        'SELECT * FROM fpl_unmatched_players WHERE fpl_code = ? AND season = ?',
+        undef, 123456, 2026
+    );
+
+    ok( $row, 'add_unmatched_fpl_player: inserts a row' );
+    cmp_ok( $row->{fpl_team_name}, 'eq', 'Test FC',
+        'add_unmatched_fpl_player: stores team name' );
+    cmp_ok( $row->{birth_date}, 'eq', '2000-01-01',
+        'add_unmatched_fpl_player: stores birth date' );
+    cmp_ok( $row->{team_join_date}, 'eq', '2026-01-01',
+        'add_unmatched_fpl_player: stores team join date' );
+    cmp_ok( $row->{suggestion_reason}, 'eq', 'no_match',
+        'add_unmatched_fpl_player: stores reason' );
+    cmp_ok( $row->{suggested_player_id}, '==', $target_id,
+        'add_unmatched_fpl_player: stores suggestion' );
+
+    # A second call upserts rather than inserting a duplicate.
+    $players->add_unmatched_fpl_player($fpl_info, 2026, {
+        team_name  => 'Test FC',
+        reason     => 'uncorroborated',
+        suggestion => {
+            player_id => $target_id,
+            score     => 0.9,
+            db_name   => 'Suggest Target',
+        },
+    });
+
+    my $count = $db->rw_db_handle->selectrow_array(
+        'SELECT count(1) FROM fpl_unmatched_players WHERE fpl_code = ?',
+        undef, 123456
+    );
+    cmp_ok( $count, '==', 1,
+        'add_unmatched_fpl_player: upserts rather than duplicates' );
+
+    $row = $db->rw_db_handle->selectrow_hashref(
+        'SELECT * FROM fpl_unmatched_players WHERE fpl_code = ? AND season = ?',
+        undef, 123456, 2026
+    );
+    cmp_ok( $row->{suggestion_reason}, 'eq', 'uncorroborated',
+        'add_unmatched_fpl_player: updates reason on upsert' );
+
+    $players->remove_unmatched_fpl_player(123456, 2026);
+
+    $count = $db->rw_db_handle->selectrow_array(
+        'SELECT count(1) FROM fpl_unmatched_players WHERE fpl_code = ?',
+        undef, 123456
+    );
+    cmp_ok( $count, '==', 0, 'remove_unmatched_fpl_player: removes row' );
 }
 
 done_testing();

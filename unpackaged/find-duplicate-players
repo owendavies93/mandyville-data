@@ -1,0 +1,117 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict, -signatures;
+
+use Mandyville::Database;
+use Mandyville::PlayerName qw(full_name similarity);
+
+use Const::Fast;
+use SQL::Abstract::More;
+
+binmode(STDOUT, ':encoding(UTF-8)');
+
+const my $MIN_FIXTURES => 10;
+const my $MIN_RATIO    => 5;
+const my $NAME_SIM     => 0.85;
+
+my $db  = Mandyville::Database->new;
+my $dbh = $db->ro_db_handle();
+
+my $sql = q{
+    SELECT p.id, p.first_name, p.last_name, p.country_id, p.date_of_birth,
+           count(pf.id) AS fixtures
+    FROM players p
+    LEFT JOIN players_fixtures pf ON pf.player_id = p.id
+    GROUP BY p.id
+    ORDER BY p.id
+};
+
+my $rows = $dbh->selectall_arrayref($sql, { Slice => {} });
+
+my (%by_name, @dupes, %seen);
+
+# Pass 1: identical normalised full name, with one record clearly busier.
+foreach my $r (@$rows) {
+    my $full = full_name($r->{first_name}, $r->{last_name});
+    push @{ $by_name{$full} }, $r if length $full;
+}
+
+foreach my $full (sort keys %by_name) {
+    my @players = sort { $b->{fixtures} <=> $a->{fixtures} } @{ $by_name{$full} };
+    next if @players < 2;
+
+    # Only compare multi-word names: single-name collisions (Vitinho,
+    # Wesley, Wallace) are usually genuinely different players.
+    next if $full !~ /\s/;
+
+    my ($keep, @rest) = @players;
+    foreach my $other (@rest) {
+        next if $keep->{country_id} != $other->{country_id};
+        next if $keep->{fixtures} < $MIN_FIXTURES;
+        next if $keep->{fixtures} < $MIN_RATIO * ($other->{fixtures} || 1);
+        next if $seen{"$keep->{id}/$other->{id}"}++;
+
+        push @dupes, _line($keep, $other, 'same name');
+    }
+}
+
+# Pass 2: same date of birth and country with a spelling-variant name.
+my %by_dob_country;
+foreach my $r (@$rows) {
+    next unless defined $r->{date_of_birth};
+    push @{ $by_dob_country{"$r->{date_of_birth}/$r->{country_id}"} }, $r;
+}
+
+foreach my $key (sort keys %by_dob_country) {
+    my @players = sort { $b->{fixtures} <=> $a->{fixtures} } @{ $by_dob_country{$key} };
+    next if @players < 2;
+
+    my ($keep, @rest) = @players;
+    foreach my $other (@rest) {
+        my $a = full_name($keep->{first_name},  $keep->{last_name});
+        my $b = full_name($other->{first_name}, $other->{last_name});
+        next unless length $a && length $b;
+        next if $a eq $b;                      # already reported in pass 1
+        next if similarity($a, $b) < $NAME_SIM;
+
+        next if $keep->{fixtures} < $MIN_FIXTURES;
+        next if $keep->{fixtures} < $MIN_RATIO * ($other->{fixtures} || 1);
+        next if $seen{"$keep->{id}/$other->{id}"}++;
+
+        push @dupes, _line($keep, $other, 'same dob/country, similar name');
+    }
+}
+
+foreach my $d (@dupes) {
+    print "$d\n";
+}
+
+print STDERR "Found " . scalar(@dupes) . " likely duplicate pairs\n";
+
+sub _line($keep, $other, $why) {
+    my $desc = _name($keep) . ' / ' . _name($other) . " ($why)";
+    return "    [ $keep->{id}, $other->{id}, '$desc' ],";
+}
+
+sub _name($r) {
+    my $n = ($r->{first_name} // '') . ' ' . ($r->{last_name} // '');
+    $n =~ s/^\s+|\s+$//g;
+    return $n;
+}
+
+=head1 NAME
+
+  find-duplicate-players
+
+=head1 DESCRIPTION
+
+  Read-only report of likely duplicate C<players> rows, for pasting
+  into C<unpackaged/merge-duplicate-players>. Flags pairs where:
+
+  * the normalised full name is identical and one record has at least
+    C<MIN_FIXTURES> appearances and at least C<MIN_RATIO> times as many
+    as the other, or
+  * date of birth and country match and the names are spelling
+    variants (similarity >= C<NAME_SIM>).
+
+=cut

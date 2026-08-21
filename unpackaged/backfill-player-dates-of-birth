@@ -1,0 +1,84 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict, -signatures;
+
+use Mandyville::API::FootballData;
+use Mandyville::Database;
+use Mandyville::Players;
+use Mandyville::Utils qw(msg);
+
+use Getopt::Long;
+use SQL::Abstract::More;
+
+binmode(STDOUT, ':encoding(UTF-8)');
+binmode(STDERR, ':encoding(UTF-8)');
+
+my $limit   = 0;
+my $dry_run = 0;
+
+GetOptions(
+    "limit=i" => \$limit,
+    "dry-run" => \$dry_run,
+);
+
+my $db  = Mandyville::Database->new;
+my $sqla = SQL::Abstract::More->new;
+my $dbh  = $db->rw_db_handle();
+
+my $players = Mandyville::Players->new({
+    dbh  => $dbh,
+    sqla => $sqla,
+});
+
+my $api = Mandyville::API::FootballData->new;
+
+# Players with a football_data_id and no date of birth, busiest first
+# so the most useful rows are backfilled before the rate limit resets.
+my $sql = q{
+    SELECT p.id, p.football_data_id, count(pf.id) AS fixtures
+    FROM players p
+    LEFT JOIN players_fixtures pf ON pf.player_id = p.id
+    WHERE p.football_data_id IS NOT NULL
+      AND p.date_of_birth IS NULL
+    GROUP BY p.id
+    ORDER BY fixtures DESC
+};
+
+$sql .= " LIMIT $limit" if $limit;
+
+my $rows = $dbh->selectall_arrayref($sql, { Slice => {} });
+
+msg "Backfilling date of birth for " . scalar(@$rows) . " players"
+    . ($dry_run ? " (dry run)" : "");
+
+my $done = 0;
+foreach my $row (@$rows) {
+    my $id    = $row->{id};
+    my $fd_id = $row->{football_data_id};
+
+    my $dob = $api->player($fd_id)->{dateOfBirth};
+
+    if (defined $dob) {
+        msg "player $id ($fd_id): $dob";
+        $players->update_date_of_birth($id, $dob) unless $dry_run;
+        $done++;
+    } else {
+        msg "player $id ($fd_id): no dateOfBirth returned";
+    }
+}
+
+msg "Set date of birth for $done players";
+
+=head1 NAME
+
+  backfill-player-dates-of-birth
+
+=head1 DESCRIPTION
+
+  Populates C<players.date_of_birth> from the football-data
+  C<persons/{id}> endpoint for players that have a
+  C<football_data_id> but no stored date of birth. Busiest players are
+  processed first. Resumable and idempotent; use C<--limit N> to run in
+  chunks (the football-data API is rate limited to ~30 req/min).
+
+=cut

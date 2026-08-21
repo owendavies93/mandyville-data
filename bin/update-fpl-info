@@ -14,7 +14,6 @@ use Mandyville::Utils qw(current_season debug msg);
 
 use DateTime;
 use SQL::Abstract::More;
-use Try::Tiny;
 
 binmode(STDOUT, ':encoding(UTF-8)');
 binmode(STDERR, ':encoding(UTF-8)');
@@ -60,8 +59,11 @@ my $fpl_api = Mandyville::API::FPL->new;
 
 my $fpl_teams = $fpl_api->teams;
 my %fpl_team_map;
+my %fpl_team_names;
 
 foreach my $fpl_team (@$fpl_teams) {
+    $fpl_team_names{ $fpl_team->{id} } = $fpl_team->{name};
+
     my $matched = $teams->find_from_name($fpl_team->{name});
     if (scalar @$matched == 1) {
         $fpl_team_map{$fpl_team->{id}} = $matched->[0];
@@ -80,44 +82,84 @@ foreach my $player (@$player_data) {
     my $first = $player->{first_name};
     my $last  = $player->{second_name};
 
-    try {
-        msg "Processing $first $last";
-        my $db_result = $players->find_player_by_fpl_info($player);
-        my $fpl_id_updated = $players->update_fpl_id($db_result->{id}, $player->{code});
-        my $starting_price = $player->{now_cost} - $player->{cost_change_start};
-        my $team_id = $fpl_team_map{$player->{team}};
-        $players->add_fpl_season_info(
-            $db_result->{id}, $season, $player->{id},
-            $player->{element_type}, $starting_price
+    msg "Processing $first $last";
+
+    my $team_id       = $fpl_team_map{ $player->{team} };
+    my $fpl_team_name = $fpl_team_names{ $player->{team} };
+
+    my $db_result = $players->find_player_by_fpl_info(
+        $player, { team_id => $team_id, date => $today }
+    );
+
+    if (!$db_result->{matched}) {
+        debug "$first $last: $db_result->{reason}";
+        $players->add_unmatched_fpl_player(
+            $player,
+            $season,
+            {
+                team_name  => $fpl_team_name,
+                reason     => $db_result->{reason},
+                suggestion => $db_result->{suggestion},
+            },
         );
+        next;
+    }
 
-        if (defined $team_id) {
-            # Only update the team if this is the correct FPL match.
-            # update_fpl_id returns 0 when fpl_id is already set, which
-            # means find_player_by_fpl_info may have returned a wrong
-            # match (a different player with a similar name).
-            if ($fpl_id_updated || $players->get_fpl_id($db_result->{id}) == $player->{code}) {
-                $players->update_player_team(
-                    $db_result->{id}, $team_id, $today
-                );
-            }
+    my $db_id = $db_result->{id};
+
+    if ($db_result->{fpl_id_conflict}) {
+        msg "WARNING: $first $last matched player $db_id which already "
+            . "holds fpl_id $db_result->{fpl_id_conflict} (expected "
+            . "$player->{code}); skipping fpl_id and team update";
+        $players->add_unmatched_fpl_player(
+            $player,
+            $season,
+            {
+                team_name  => $fpl_team_name,
+                reason     => 'fpl_id conflict',
+                suggestion => {
+                    player_id => $db_id,
+                    score     => $db_result->{score},
+                    db_name   => ($db_result->{first_name} // '') . ' '
+                                 . ($db_result->{last_name} // ''),
+                },
+            },
+        );
+        next;
+    }
+
+    $players->update_fpl_id($db_id, $player->{code});
+
+    my $dob_status =
+        $players->update_date_of_birth($db_id, $player->{birth_date});
+    debug "date_of_birth conflict for $first $last (player $db_id)"
+        if $dob_status == -1;
+
+    my $starting_price =
+        $player->{now_cost} - $player->{cost_change_start};
+
+    $players->add_fpl_season_info(
+        $db_id, $season, $player->{id},
+        $player->{element_type}, $starting_price
+    );
+
+    if (defined $team_id) {
+        my $start_date = $today;
+        my $join       = $player->{team_join_date};
+
+        if (defined $join && $join le $today) {
+            my $open_start = $players->get_open_stint_start($db_id);
+            $start_date = $join
+                if !defined $open_start || $join gt $open_start;
         }
 
-        $players->remove_unmatched_fpl_player($player->{code}, $season);
+        $players->update_player_team($db_id, $team_id, $start_date);
+    }
 
-        my $player_history = $fpl_api->player_history($player->{id});
-        $players->process_fpl_season_history($db_result->{id}, $player_history);
-    } catch {
-        if (/Multiple matches/) {
-            debug "Multiple matches found for $first $last";
-            $players->add_unmatched_fpl_player($player, $season);
-        } elsif (/No match found/) {
-            debug "No match found for $first $last";
-            $players->add_unmatched_fpl_player($player, $season);
-        } else {
-            die "$_";
-        }
-    };
+    $players->remove_unmatched_fpl_player($player->{code}, $season);
+
+    my $player_history = $fpl_api->player_history($player->{id});
+    $players->process_fpl_season_history($db_id, $player_history);
 }
 
 msg "Done!";

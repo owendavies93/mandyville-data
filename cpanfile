@@ -15,6 +15,7 @@ requires 'DBD::Pg';
 requires 'DBI';
 requires 'File::Temp';
 requires 'SQL::Abstract::More';
+requires 'Text::Levenshtein::XS';
 requires 'YAML::XS';
 
 # tests

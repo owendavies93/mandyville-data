@@ -1,0 +1,156 @@
+#!/usr/bin/env perl
+
+use Mojo::Base -strict, -signatures;
+
+use Mandyville::API::FPL;
+use Mandyville::Database;
+use Mandyville::Players;
+use Mandyville::Teams;
+use Mandyville::Utils qw(debug);
+
+use DateTime;
+use Getopt::Long;
+use Mojo::File;
+use Mojo::JSON qw(decode_json encode_json);
+use SQL::Abstract::More;
+
+binmode(STDOUT, ':encoding(UTF-8)');
+binmode(STDERR, ':encoding(UTF-8)');
+
+my $bootstrap_file;
+my $out_file = '/tmp/fpl-matches.json';
+my $no_context = 0;
+
+GetOptions(
+    "bootstrap=s" => \$bootstrap_file,
+    "out=s"       => \$out_file,
+    "no-context"  => \$no_context,
+);
+
+my $db   = Mandyville::Database->new;
+my $sqla = SQL::Abstract::More->new;
+
+my $teams = Mandyville::Teams->new({
+    dbh  => $db->rw_db_handle(),
+    sqla => $sqla,
+});
+
+my $players = Mandyville::Players->new({
+    dbh  => $db->rw_db_handle(),
+    sqla => $sqla,
+});
+
+# Fetch the bootstrap (from a file if provided, else the API).
+my $bootstrap;
+if (defined $bootstrap_file) {
+    $bootstrap = decode_json(Mojo::File->new($bootstrap_file)->slurp);
+} else {
+    my $fpl_api = Mandyville::API::FPL->new;
+    $bootstrap = {
+        elements => $fpl_api->players,
+        teams    => $fpl_api->teams,
+    };
+}
+
+# Map FPL team ids to mandyville team ids.
+my %fpl_team_map;
+foreach my $fpl_team (@{ $bootstrap->{teams} }) {
+    my $matched = $teams->find_from_name($fpl_team->{name});
+    if (scalar @$matched == 1) {
+        $fpl_team_map{ $fpl_team->{id} } = $matched->[0];
+    } else {
+        debug "Could not resolve FPL team: $fpl_team->{name}";
+    }
+}
+
+my $today = DateTime->today->ymd;
+my @rows;
+
+foreach my $player (@{ $bootstrap->{elements} }) {
+    my $team_id = $fpl_team_map{ $player->{team} };
+
+    my $context = {
+        team_id => $team_id,
+        date    => $today,
+    };
+
+    my ($result, $error);
+    my $ok;
+    if ($no_context) {
+        $ok = eval {
+            $result = $players->find_player_by_fpl_info($player);
+            1;
+        };
+    } else {
+        $ok = eval {
+            $result = $players->find_player_by_fpl_info($player, $context);
+            1;
+        };
+    }
+    $error = $@ if !$ok;
+
+    my %row = (
+        code      => $player->{code},
+        fpl_name  => $player->{first_name} . ' ' . $player->{second_name},
+        web_name  => $player->{web_name},
+        fpl_team  => $player->{team},
+        db_team   => $team_id,
+    );
+
+    if (!$ok) {
+        # Old code died on no/multiple match
+        $row{matched} = 0;
+        $row{reason}  = $error =~ /Multiple matches/
+            ? 'multiple_matches'
+            : $error =~ /No match/
+                ? 'no_match'
+                : "error: $error";
+    } elsif (!exists $result->{matched}) {
+        # Old return shape: bare { id, first_name, last_name }
+        $row{matched}   = 1;
+        $row{player_id} = $result->{id};
+        $row{db_name}   = ($result->{first_name} // '') . ' ' .
+                          ($result->{last_name} // '');
+        $row{method}    = 'exact';
+    } elsif ($result->{matched}) {
+        $row{matched}   = 1;
+        $row{player_id} = $result->{id};
+        $row{db_name}   = ($result->{first_name} // '') . ' ' .
+                          ($result->{last_name} // '');
+        $row{method}    = $result->{method};
+        $row{score}     = $result->{score};
+    } else {
+        # New return shape: matched => 0
+        $row{matched} = 0;
+        $row{reason}  = $result->{reason} // 'no_match';
+        if ($result->{suggestion}) {
+            $row{suggestion_player_id} = $result->{suggestion}{player_id};
+            $row{suggestion_score}     = $result->{suggestion}{score};
+            $row{suggestion_name}      = $result->{suggestion}{db_name};
+        }
+    }
+
+    push @rows, \%row;
+}
+
+@rows = sort { $a->{code} <=> $b->{code} } @rows;
+
+Mojo::File->new($out_file)->spurt(encode_json(\@rows));
+
+my $matched = grep { $_->{matched} } @rows;
+my $unmatched = @rows - $matched;
+print "Matched: $matched / " . scalar(@rows) . " (unmatched: $unmatched)\n";
+print "Wrote $out_file\n";
+
+=head1 NAME
+
+  dump-fpl-matches
+
+=head1 DESCRIPTION
+
+  Runs every FPL element through find_player_by_fpl_info and writes a
+  diffable JSON report of the results. Read-only: makes no database
+  changes. Pass --bootstrap to reuse a cached bootstrap-static payload
+  so before/after runs of the matcher compare identical input.
+
+=cut
