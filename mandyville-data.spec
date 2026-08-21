@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    19%{?dist}
+Release:    20%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -22,6 +22,7 @@ Requires:   perl(File::Temp)
 Requires:   perl(Mojo::Base)
 Requires:   perl(Mojolicious)
 Requires:   perl(SQL::Abstract::More)
+Requires:   perl(Text::Levenshtein::XS)
 Requires:   perl(Try::Tiny)
 Requires:   perl(YAML::XS)
 
@@ -93,6 +94,11 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Fri Aug 21 2026 Owen Davies <owen@odavi.es> - 0.2-20
+- Update submodule
+- Rework player name matching to account for recent findings
+- Update merge-duplicate-players to account for new tables
+
 * Thu Aug 20 2026 Owen Davies <owen@odavi.es> - 0.2-19
 
 * Thu Aug 20 2026 Owen Davies <owen@odavi.es> - 0.2-18
