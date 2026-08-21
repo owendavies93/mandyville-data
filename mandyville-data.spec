@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    20%{?dist}
+Release:    21%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -94,6 +94,9 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Fri Aug 21 2026 Owen Davies <owen@odavi.es> - 0.2-21
+- Use an alternative module for Lev distance
+
 * Fri Aug 21 2026 Owen Davies <owen@odavi.es> - 0.2-20
 - Update submodule
 - Rework player name matching to account for recent findings
