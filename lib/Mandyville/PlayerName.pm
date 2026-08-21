@@ -5,7 +5,7 @@ use Mojo::Base -strict, -signatures;
 use Const::Fast;
 use Exporter 'import';
 use List::Util qw(max);
-use Text::Levenshtein::XS ();
+use Text::LevenshteinXS ();
 use Unicode::Normalize qw(NFKD);
 
 =head1 NAME
@@ -218,7 +218,7 @@ sub similarity($a, $b) {
     return 0 if $na eq '' || $nb eq '';
 
     my $max_len = max(length $na, length $nb);
-    my $lev     = 1 - (Text::Levenshtein::XS::distance($na, $nb) / $max_len);
+    my $lev     = 1 - (Text::LevenshteinXS::distance($na, $nb) / $max_len);
     my $token   = _token_similarity($na, $nb);
 
     return max($lev, $token);
@@ -305,7 +305,7 @@ sub _token_ratio($a, $b) {
     my $max_len = max(length $a, length $b);
     return 0 unless $max_len;
 
-    return 1 - (Text::Levenshtein::XS::distance($a, $b) / $max_len);
+    return 1 - (Text::LevenshteinXS::distance($a, $b) / $max_len);
 }
 
 1;

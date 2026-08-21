@@ -22,7 +22,7 @@ Requires:   perl(File::Temp)
 Requires:   perl(Mojo::Base)
 Requires:   perl(Mojolicious)
 Requires:   perl(SQL::Abstract::More)
-Requires:   perl(Text::Levenshtein::XS)
+Requires:   perl(Text::LevenshteinXS)
 Requires:   perl(Try::Tiny)
 Requires:   perl(YAML::XS)
 
