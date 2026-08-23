@@ -282,6 +282,70 @@ sub add_fpl_season_info($self, $player_id, $season, $fpl_id, $position_id, $star
     return $id;
 }
 
+=item record_fpl_price ( PLAYER_ID, SEASON, FPL_ELEMENT, PRICE, [ SELECTED_BY_PERCENT, TRANSFERS_IN, TRANSFERS_OUT ] )
+
+  Record the current price of an FPL element for a season in
+  C<fpl_player_prices>. Rows are change-only: the open row (C<end_time
+  IS NULL>) is closed and a new row inserted only when the price or the
+  ownership snapshot fields change, so the history of price movements is
+  preserved. C<PRICE> is the raw FPL C<now_cost> in tenths of millions
+  and is stored in millions. C<PLAYER_ID> may be undef for elements that
+  have not yet been matched to a mandyville player.
+
+=cut
+
+sub record_fpl_price($self, $player_id, $season, $fpl_element, $price, $selected_by_percent = undef, $transfers_in = undef, $transfers_out = undef) {
+    my $price_m = defined $price ? $price / 10 : undef;
+
+    my $cur = $self->dbh->selectrow_hashref(
+        'SELECT id, price, selected_by_percent, transfers_in_event,
+                transfers_out_event
+         FROM fpl_player_prices
+         WHERE season = ? AND fpl_element = ? AND end_time IS NULL',
+        undef, $season, $fpl_element
+    );
+
+    if (!$cur) {
+        $self->dbh->do(
+            'INSERT INTO fpl_player_prices
+               (player_id, fpl_element, season, price, selected_by_percent,
+                transfers_in_event, transfers_out_event)
+             VALUES (?,?,?,?,?,?,?)',
+            undef, $player_id, $fpl_element, $season, $price_m,
+            $selected_by_percent, $transfers_in, $transfers_out
+        );
+        return 1;
+    }
+
+    my $num_differs = sub {
+        my ($a, $b) = @_;
+        return (defined $a ? 1 : 0) != (defined $b ? 1 : 0)
+            || (defined $a && $a != $b);
+    };
+
+    my $changed = 0;
+    $changed ||= $num_differs->($cur->{price}, $price_m);
+    $changed ||= $num_differs->($cur->{selected_by_percent}, $selected_by_percent);
+    $changed ||= $num_differs->($cur->{transfers_in_event}, $transfers_in);
+    $changed ||= $num_differs->($cur->{transfers_out_event}, $transfers_out);
+
+    return 0 unless $changed;
+
+    $self->dbh->do(
+        'UPDATE fpl_player_prices SET end_time = now() WHERE id = ?',
+        undef, $cur->{id}
+    );
+    $self->dbh->do(
+        'INSERT INTO fpl_player_prices
+           (player_id, fpl_element, season, price, selected_by_percent,
+            transfers_in_event, transfers_out_event)
+         VALUES (?,?,?,?,?,?,?)',
+        undef, $player_id, $fpl_element, $season, $price_m,
+        $selected_by_percent, $transfers_in, $transfers_out
+    );
+    return 1;
+}
+
 =item add_unmatched_fpl_player ( FPL_INFO, SEASON, [ CONTEXT ] )
 
   Log an unmatched FPL player to the C<fpl_unmatched_players> table.

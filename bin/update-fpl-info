@@ -102,6 +102,12 @@ foreach my $player (@$player_data) {
                 suggestion => $db_result->{suggestion},
             },
         );
+        $players->record_fpl_price(
+            undef, $season, $player->{id}, $player->{now_cost},
+            $player->{selected_by_percent},
+            $player->{transfers_in_event},
+            $player->{transfers_out_event},
+        );
         next;
     }
 
@@ -141,6 +147,13 @@ foreach my $player (@$player_data) {
     $players->add_fpl_season_info(
         $db_id, $season, $player->{id},
         $player->{element_type}, $starting_price
+    );
+
+    $players->record_fpl_price(
+        $db_id, $season, $player->{id}, $player->{now_cost},
+        $player->{selected_by_percent},
+        $player->{transfers_in_event},
+        $player->{transfers_out_event},
     );
 
     if (defined $team_id) {
