@@ -1,6 +1,6 @@
 Name:       mandyville-data
 Version:    0.2
-Release:    22%{?dist}
+Release:    23%{?dist}
 Summary:    Data fetching and data storage for mandyville.
 
 License:    MIT
@@ -94,6 +94,9 @@ cp -a lib/Mandyville/* %{buildroot}%{perl_vendorlib}/Mandyville/
 rm -rf $RPM_BUILD_ROOT
 
 %changelog
+* Sun Aug 23 2026 Owen Davies <owen@odavi.es> - 0.2-23
+- Look at correct field name in FPL draft updating logic
+
 * Fri Aug 21 2026 Owen Davies <owen@odavi.es> - 0.2-22
 - Be more tolerant of errors from the football data API; retry in the backfill DOB script
 
