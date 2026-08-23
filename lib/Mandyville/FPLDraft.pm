@@ -698,7 +698,13 @@ sub _upsert_transactions($self, $league_db_id, $by_entry_id, $txns) {
         next if $row;
 
         my $draft_entry_id =
-            defined $t->{subject} ? $by_entry_id->{$t->{subject}} : undef;
+            defined $t->{entry} ? $by_entry_id->{$t->{entry}} : undef;
+
+        unless (defined $draft_entry_id) {
+            debug "Skipping transaction $txn_id: unknown entry_id $t->{entry}";
+            next;
+        }
+
         my $player_in  = defined $t->{element_in}
             ? $self->{element_map}{$t->{element_in}} : undef;
         my $player_out = defined $t->{element_out}
